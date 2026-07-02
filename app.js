@@ -232,9 +232,6 @@ class Game {
     this.gameOver = false;
     this.animating = false;
     
-    // LAN Multiplayer variables
-    this.lanRole = 1; 
-    this.lanInterval = null;
     
     // WebRTC Online Multiplayer variables
     this.peer = null;
@@ -250,7 +247,6 @@ class Game {
     this.scores = {
       pvp: { p1: 0, p2: 0, draws: 0 },
       pve: { p1: 0, p2: 0, draws: 0 },
-      lan: { p1: 0, p2: 0, draws: 0 },
       online: { p1: 0, p2: 0, draws: 0 }
     };
     
@@ -280,8 +276,6 @@ class Game {
         this.switchMode('online');
         this.connectToPeer(joinRoomId);
       }, 750);
-    } else if (this.gameMode === 'lan') {
-      this.startLANPolling();
     }
   }
   
@@ -323,11 +317,9 @@ class Game {
     
     this.modePvP = document.getElementById('mode-pvp');
     this.modePvE = document.getElementById('mode-pve');
-    this.modeLAN = document.getElementById('mode-lan');
     this.modeOnline = document.getElementById('mode-online');
     
     this.difficultyGroup = document.getElementById('difficulty-group');
-    this.lanConfigGroup = document.getElementById('lan-config-group');
     this.onlineConfigGroup = document.getElementById('online-config-group');
     
     // Peer components
@@ -338,12 +330,6 @@ class Game {
     this.inputPeerId = document.getElementById('input-peer-id');
     this.connectPeerBtn = document.getElementById('connect-peer-btn');
     this.playerRenameGroup = document.getElementById('player-rename-group');
-    
-    // LAN components
-    this.roleP1Btn = document.getElementById('role-p1');
-    this.roleP2Btn = document.getElementById('role-p2');
-    this.copyUrlBtn = document.getElementById('copy-url-btn');
-    this.shareUrlInput = document.getElementById('lan-share-url');
     
     // Name inputs
     this.inputP1Name = document.getElementById('input-p1-name');
@@ -362,20 +348,6 @@ class Game {
     this.winPlayAgain = document.getElementById('win-play-again');
     this.winClose = document.getElementById('win-close');
     this.winEmoji = document.getElementById('win-emoji');
-    
-    // Pre-populate LAN link
-    const currentHost = window.location.hostname || "192.168.0.46";
-    const portString = window.location.port ? `:${window.location.port}` : ":8000";
-    const lanLink = `http://${currentHost}${portString}/`;
-    this.shareUrlInput.value = lanLink;
-    document.getElementById('lan-qr-code').src = `https://api.qrserver.com/v1/create-qr-code/?size=130x130&data=${encodeURIComponent(lanLink)}`;
-    
-    // Load local LAN role setting if active
-    const savedRole = sessionStorage.getItem('connect4_lan_role');
-    if (savedRole) {
-      this.lanRole = parseInt(savedRole);
-      this.updateLANRoleUI();
-    }
     
     // Populate board cell covers
     this.boardCover.innerHTML = '';
@@ -409,14 +381,15 @@ class Game {
       // AI blocks player click
       if (this.gameMode === 'pve' && this.activePlayer === 2) return;
       
-      // LAN turn validation
-      if (this.gameMode === 'lan' && this.activePlayer !== this.lanRole) return;
-      
+
       // Online turn validation
       if (this.gameMode === 'online') {
         if (!this.peerConn) return;
         const myRole = this.isOnlineHost ? 1 : 2;
-        if (this.activePlayer !== myRole) return;
+        if (this.activePlayer !== myRole) {
+          alert("It's not your turn! Please wait for your opponent.");
+          return;
+        }
       }
       
       const col = parseInt(colEl.dataset.col);
@@ -435,11 +408,7 @@ class Game {
         return;
       }
       
-      if (this.gameMode === 'lan' && this.activePlayer !== this.lanRole) {
-        this.clearPreviews();
-        return;
-      }
-      
+
       if (this.gameMode === 'online') {
         if (!this.peerConn) {
           this.clearPreviews();
@@ -467,26 +436,14 @@ class Game {
     // Drawer Game Modes
     this.modePvP.addEventListener('click', () => this.switchMode('pvp'));
     this.modePvE.addEventListener('click', () => this.switchMode('pve'));
-    this.modeLAN.addEventListener('click', () => this.switchMode('lan'));
     this.modeOnline.addEventListener('click', () => this.switchMode('online'));
-    
-    // LAN Role Selection
-    this.roleP1Btn.addEventListener('click', () => this.switchLANRole(1));
-    this.roleP2Btn.addEventListener('click', () => this.switchLANRole(2));
-    
+
     // Connect to target Peer ID
     this.connectPeerBtn.addEventListener('click', () => {
       this.connectToPeer(this.inputPeerId.value.trim());
     });
     
-    // Copy LAN URL
-    this.copyUrlBtn.addEventListener('click', () => {
-      this.sounds.playClick();
-      this.shareUrlInput.select();
-      document.execCommand('copy');
-      alert("LAN Link copied to clipboard!");
-    });
-    
+
     // Copy WebRTC URL
     this.copyOnlineUrlBtn.addEventListener('click', () => {
       this.sounds.playClick();
@@ -512,7 +469,6 @@ class Game {
       this.p1NameText.textContent = val;
       this.updateAllTimeScoreUI();
       this.saveActiveGameState();
-      if (this.gameMode === 'lan') this.syncNamesToServer();
       if (this.gameMode === 'online' && this.peerConn) {
         this.peerConn.send({ type: 'name_update', name: val });
       }
@@ -523,7 +479,6 @@ class Game {
       this.p2NameText.textContent = val;
       this.updateAllTimeScoreUI();
       this.saveActiveGameState();
-      if (this.gameMode === 'lan') this.syncNamesToServer();
       if (this.gameMode === 'online' && this.peerConn) {
         this.peerConn.send({ type: 'name_update', name: val });
       }
@@ -653,12 +608,6 @@ class Game {
       this.p1NameText.textContent = this.inputP1Name.value.trim() || 'Red Player';
       this.p2NameText.textContent = 'Quantum AI';
       this.p2NameInputGroup.classList.add('hidden');
-    } else if (mode === 'lan') {
-      this.modeLAN.classList.add('active');
-      this.lanConfigGroup.classList.remove('hidden');
-      this.p1NameText.textContent = this.inputP1Name.value.trim() || 'Red Player';
-      this.p2NameText.textContent = this.inputP2Name.value.trim() || 'Yellow Player';
-      this.startLANPolling();
     } else if (mode === 'online') {
       this.modeOnline.classList.add('active');
       this.onlineConfigGroup.classList.remove('hidden');
@@ -670,20 +619,7 @@ class Game {
     this.renderScores();
     this.restartGame();
   }
-  
-  switchLANRole(role) {
-    this.sounds.playClick();
-    this.lanRole = role;
-    sessionStorage.setItem('connect4_lan_role', role);
-    this.updateLANRoleUI();
-    this.updateTurnUI();
-  }
-  
-  updateLANRoleUI() {
-    this.roleP1Btn.classList.toggle('active', this.lanRole === 1);
-    this.roleP2Btn.classList.toggle('active', this.lanRole === 2);
-  }
-  
+
   editPlayerNameInline(player) {
     if (this.gameMode === 'pve' && player === 2) return; 
     if (this.gameMode === 'online') {
@@ -719,7 +655,6 @@ class Game {
       this.updateAllTimeScoreUI();
       this.saveActiveGameState();
       
-      if (this.gameMode === 'lan') this.syncNamesToServer();
       if (this.gameMode === 'online' && this.peerConn) {
         this.peerConn.send({ type: 'name_update', name: newName });
       }
@@ -766,9 +701,7 @@ class Game {
     const row = this.getNextOpenRow(this.board, col);
     if (row === -1) return; 
     
-    if (this.gameMode === 'lan') {
-      this.postLANMove(col, row);
-    } else if (this.gameMode === 'online') {
+    if (this.gameMode === 'online') {
       if (this.peerConn) {
         this.peerConn.send({ type: 'move', col: col });
         this.makeMove(row, col);
@@ -799,7 +732,7 @@ class Game {
     }, 15);
     
     // Disable undo for network matches
-    this.undoBtn.disabled = this.gameMode === 'lan' || this.gameMode === 'online'; 
+    this.undoBtn.disabled = this.gameMode === 'online';
     
     this.saveActiveGameState();
     
@@ -961,13 +894,7 @@ class Game {
   }
   
   restartGame() {
-    if (this.gameMode === 'lan') {
-      fetch('/api/reset', { method: 'POST' })
-        .then(res => res.json())
-        .then(data => {
-          this.applyLANServerState(data.state);
-        });
-    } else if (this.gameMode === 'online') {
+    if (this.gameMode === 'online') {
       this.board = Array(this.rows).fill(null).map(() => Array(this.cols).fill(0));
       this.moveHistory = [];
       this.gameOver = false;
@@ -1016,9 +943,7 @@ class Game {
       p2Card.classList.remove('active');
       this.turnColorIndicator.className = 'turn-color-indicator red';
       
-      if (this.gameMode === 'lan') {
-        this.turnText.textContent = this.lanRole === 1 ? "Your Turn" : `${p1Name}'s Turn`;
-      } else if (this.gameMode === 'online') {
+      if (this.gameMode === 'online') {
         const myRole = this.isOnlineHost ? 1 : 2;
         this.turnText.textContent = myRole === 1 ? "Your Turn" : `${p1Name}'s Turn`;
       } else {
@@ -1029,9 +954,7 @@ class Game {
       p2Card.classList.add('active');
       this.turnColorIndicator.className = 'turn-color-indicator yellow';
       
-      if (this.gameMode === 'lan') {
-        this.turnText.textContent = this.lanRole === 2 ? "Your Turn" : `${p2Name}'s Turn`;
-      } else if (this.gameMode === 'online') {
+      if (this.gameMode === 'online') {
         const myRole = this.isOnlineHost ? 1 : 2;
         this.turnText.textContent = myRole === 2 ? "Your Turn" : `${p2Name}'s Turn`;
       } else {
@@ -1100,163 +1023,6 @@ class Game {
     return null;
   }
   
-  // ================= LAN MULTIPLAYER SERVICES =================
-  
-  startLANPolling() {
-    this.stopLANPolling();
-    this.undoBtn.disabled = true; 
-    
-    this.pollLANState();
-    this.lanInterval = setInterval(() => this.pollLANState(), 500);
-  }
-  
-  stopLANPolling() {
-    if (this.lanInterval) {
-      clearInterval(this.lanInterval);
-      this.lanInterval = null;
-    }
-  }
-  
-  pollLANState() {
-    fetch('/api/state')
-      .then(res => res.json())
-      .then(data => {
-        this.applyLANServerState(data);
-      })
-      .catch(err => {
-        console.error("Failed to poll LAN state from coordinator", err);
-      });
-  }
-  
-  applyLANServerState(state) {
-    if (!state) return;
-    
-    this.p1NameText.textContent = state.p1_name;
-    this.p2NameText.textContent = state.p2_name;
-    this.inputP1Name.value = state.p1_name;
-    this.inputP2Name.value = state.p2_name;
-    
-    this.scores.lan.p1 = state.p1_score;
-    this.scores.lan.p2 = state.p2_score;
-    this.scores.lan.draws = state.draws;
-    this.renderScores();
-    this.updateAllTimeScoreUI();
-    
-    this.timerSeconds = state.timerSeconds;
-    this.updateTimerDisplay();
-    
-    const serverMovesCount = state.moves.length;
-    const localMovesCount = this.moveHistory.length;
-    
-    if (serverMovesCount === 0 && localMovesCount > 0) {
-      this.board = Array(this.rows).fill(null).map(() => Array(this.cols).fill(0));
-      this.moveHistory = [];
-      this.tokensContainer.innerHTML = '';
-      this.winOverlay.classList.add('hidden');
-      this.confetti.stop();
-      this.gameOver = false;
-      this.activePlayer = 1;
-      this.updateTurnUI();
-    } else if (serverMovesCount > localMovesCount) {
-      for (let i = localMovesCount; i < serverMovesCount; i++) {
-        const move = state.moves[i];
-        const duplicate = this.tokensContainer.querySelector(`.token[data-row="${move.row}"][data-col="${move.col}"]`);
-        if (!duplicate) {
-          this.board[move.row][move.col] = move.player;
-          this.moveHistory.push(move);
-          
-          this.sounds.playDrop(move.row);
-          
-          const token = document.createElement('div');
-          token.className = `token player${move.player}`;
-          token.dataset.row = move.row;
-          token.dataset.col = move.col;
-          token.style.left = `calc(${move.col} * (100% / var(--board-cols)) + (100% / var(--board-cols) - var(--token-size)) / 2)`;
-          token.style.transform = `translateY(calc(-1.5 * var(--cell-size) + (var(--cell-size) - var(--token-size)) / 2))`;
-          this.tokensContainer.appendChild(token);
-          
-          this.animating = true;
-          setTimeout(() => {
-            token.style.transform = `translateY(calc(${move.row} * var(--cell-size) + (var(--cell-size) - var(--token-size)) / 2))`;
-          }, 15);
-          
-          setTimeout(() => {
-            this.animating = false;
-            this.syncWinOverlayState(state);
-          }, 450);
-        }
-      }
-    }
-    
-    if (!this.animating) {
-      this.activePlayer = state.activePlayer;
-      this.gameOver = state.gameOver;
-      this.updateTurnUI();
-      this.syncWinOverlayState(state);
-    }
-  }
-  
-  syncWinOverlayState(state) {
-    if (state.gameOver && this.winOverlay.classList.contains('hidden')) {
-      this.gameOver = true;
-      this.highlightWinningTokens(state.winningCells);
-      this.confetti.start();
-      
-      const p1Name = this.p1NameText.textContent;
-      const p2Name = this.p2NameText.textContent;
-      
-      if (state.winner) {
-        const winnerName = state.winner === 1 ? p1Name : p2Name;
-        this.turnText.textContent = `${winnerName} Wins!`;
-        this.turnColorIndicator.className = `turn-color-indicator ${state.winner === 1 ? 'red' : 'yellow'}`;
-        
-        this.winTitle.textContent = `${winnerName} Wins!`;
-        this.winSubtitle.textContent = `A glorious LAN victory achieved in ${state.moves.length} moves.`;
-        this.winEmoji.textContent = state.winner === 1 ? '🏆' : '🤖';
-      } else {
-        this.turnText.textContent = "It's a Draw!";
-        this.winTitle.textContent = "Match Draw!";
-        this.winSubtitle.textContent = "A perfect defensive grid on the LAN.";
-        this.winEmoji.textContent = '🤝';
-      }
-      
-      setTimeout(() => {
-        this.winOverlay.classList.remove('hidden');
-      }, 750);
-    }
-  }
-  
-  postLANMove(col, row) {
-    this.animating = true;
-    const moveData = { col, row, player: this.lanRole };
-    
-    this.makeMove(row, col);
-    
-    fetch('/api/move', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(moveData)
-    })
-      .then(res => res.json())
-      .then(data => {
-        this.applyLANServerState(data.state);
-      })
-      .catch(err => {
-        console.error("Failed to POST move to server coordinator", err);
-      });
-  }
-  
-  syncNamesToServer() {
-    const names = {
-      p1_name: this.p1NameText.textContent,
-      p2_name: this.p2NameText.textContent
-    };
-    fetch('/api/update_names', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(names)
-    });
-  }
   
   // ================= WEBRTC ONLINE MULTIPLAYER SERVICES =================
   
@@ -1429,15 +1195,7 @@ class Game {
       this.timerSeconds++;
       this.updateTimerDisplay();
       
-      // LAN P1 clock broadcast
-      if (this.gameMode === 'lan' && this.lanRole === 1 && !this.gameOver) {
-        fetch('/api/sync_timer', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ timerSeconds: this.timerSeconds })
-        });
-      }
-      
+
       // WebRTC Host clock broadcast
       if (this.gameMode === 'online' && this.isOnlineHost && this.peerConn && !this.gameOver) {
         this.peerConn.send({ type: 'timer_sync', seconds: this.timerSeconds });
@@ -1496,7 +1254,7 @@ class Game {
   }
   
   saveActiveGameState() {
-    if (this.gameMode === 'lan' || this.gameMode === 'online') return; 
+    if (this.gameMode === 'online') return; 
     
     const state = {
       board: this.board,
@@ -1522,8 +1280,8 @@ class Game {
     try {
       const state = JSON.parse(stored);
       
-      // Do not restore LAN/Online states dynamically from previous local storage runs
-      if (state.gameMode === 'lan' || state.gameMode === 'online') return false;
+      // Do not restore Online states dynamically from previous local storage runs
+      if (state.gameMode === 'online') return false;
       
       this.board = state.board;
       this.moveHistory = state.moveHistory;
@@ -1767,18 +1525,10 @@ class Game {
   }
   
   resetStats() {
-    if (this.gameMode === 'lan') {
-      fetch('/api/reset_scores', { method: 'POST' })
-        .then(res => res.json())
-        .then(data => {
-          this.applyLANServerState(data.state);
-        });
-    } else {
-      this.scores[this.gameMode] = { p1: 0, p2: 0, draws: 0 };
-      this.saveStats();
-      this.saveActiveGameState();
-      this.renderScores();
-    }
+    this.scores[this.gameMode] = { p1: 0, p2: 0, draws: 0 };
+    this.saveStats();
+    this.saveActiveGameState();
+    this.renderScores();
   }
 }
 

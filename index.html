@@ -214,8 +214,7 @@
           <div class="mode-selectors-vertical">
             <button id="mode-pvp" class="mode-btn active" data-mode="pvp">👥 Pass & Play</button>
             <button id="mode-pve" class="mode-btn" data-mode="pve">🤖 Vs Quantum AI</button>
-            <button id="mode-lan" class="mode-btn" data-mode="lan">🌐 LAN Multiplayer</button>
-            <button id="mode-online" class="mode-btn" data-mode="online">⚡ Online P2P (WebRTC)</button>
+            <button id="mode-online" class="mode-btn" data-mode="online">⚡ Play with a Friend</button>
           </div>
         </div>
 
@@ -244,34 +243,6 @@
             <div class="copy-url-wrapper">
               <input type="text" id="input-peer-id" placeholder="Paste Peer Room ID">
               <button id="connect-peer-btn" class="copy-btn" style="width: auto; padding: 0 14px; font-weight: bold;">Connect</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- LAN Configuration (Only displays when LAN Mode is active) -->
-        <div id="lan-config-group" class="setting-item hidden">
-          <label>LAN Match Settings</label>
-          
-          <div class="role-selector-box">
-            <span>Your Network Role:</span>
-            <div class="role-selectors">
-              <button id="role-p1" class="role-btn active" data-role="1">Red (P1)</button>
-              <button id="role-p2" class="role-btn" data-role="2">Yellow (P2)</button>
-            </div>
-          </div>
-          
-          <div class="share-link-box">
-            <span>LAN Link (Click to Copy):</span>
-            <div class="copy-url-wrapper">
-              <input type="text" id="lan-share-url" value="http://192.168.0.46:8000/" readonly>
-              <button id="copy-url-btn" class="copy-btn">📋</button>
-            </div>
-          </div>
-
-          <div class="qr-code-box">
-            <span>Scan to Join on Phone:</span>
-            <div class="qr-image-wrapper">
-              <img id="lan-qr-code" src="https://api.qrserver.com/v1/create-qr-code/?size=130x130&data=http://192.168.0.46:8000/" alt="LAN QR Code">
             </div>
           </div>
         </div>
