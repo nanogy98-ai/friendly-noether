@@ -390,6 +390,42 @@ test('restored games rebuild the move tracker and next move number', () => {
   assert.equal(document.getElementById('tracker-list').innerText, '1.DC');
 });
 
+test('restored computer games migrate old fake player names', () => {
+  const storedState = {
+    board: [
+      [0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 1, 2, 0, 0]
+    ],
+    moveHistory: [
+      { row: 5, col: 3, player: 1 },
+      { row: 5, col: 4, player: 2 }
+    ],
+    activePlayer: 1,
+    gameMode: 'pve',
+    difficulty: 'medium',
+    scores: {
+      pvp: { p1: 0, p2: 0, draws: 0 },
+      pve: { p1: 0, p2: 0, draws: 0 },
+      online: { p1: 0, p2: 0, draws: 0 }
+    },
+    p1_name: 'Red Player',
+    p2_name_display: 'Quantum AI',
+    p2_name_input: 'Yellow Player',
+    timerSeconds: 8,
+    gameOver: false
+  };
+
+  const { document } = loadGame({
+    connect4_active_game: JSON.stringify(storedState)
+  });
+
+  assert.equal(document.getElementById('p2-name-text').textContent, 'Computer');
+});
+
 test('saved active game state preserves each player input separately', () => {
   const { game, document, context } = loadGame();
   document.getElementById('input-p1-name').value = 'Ada';

@@ -1309,8 +1309,8 @@ class Game {
       const p2InputName = state.p2_name_input || state.p2_name_display || 'Yellow Player';
       this.p1NameText.textContent = state.p1_name || p1InputName;
       this.inputP1Name.value = p1InputName;
-      this.p2NameText.textContent = state.p2_name_display || p2InputName;
       this.inputP2Name.value = p2InputName;
+      this.p2NameText.textContent = this.gameMode === 'pve' ? 'Computer' : (state.p2_name_display || p2InputName);
       
       document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
       if (this.gameMode === 'pvp') {

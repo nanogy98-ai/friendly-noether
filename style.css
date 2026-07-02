@@ -1665,6 +1665,75 @@ body {
   color: rgba(244, 248, 255, 0.92);
 }
 
+.yellow-player-card {
+  justify-content: flex-start;
+  padding-top: 34px;
+  padding-bottom: 188px;
+}
+
+.yellow-player-card .avatar-container {
+  width: 88px;
+  height: 88px;
+  margin-bottom: 10px;
+}
+
+.yellow-player-card .avatar-initial {
+  font-size: 42px;
+}
+
+.yellow-player-card h2 {
+  font-size: 20px;
+}
+
+.yellow-player-card .score-divider {
+  margin: 8px 0 14px;
+}
+
+.yellow-player-card .score-display {
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.yellow-player-card .score-num {
+  font-size: 52px;
+}
+
+.yellow-player-card .move-tracker {
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  bottom: 24px;
+  width: auto;
+  height: 148px;
+  min-height: 0;
+  padding: 14px 16px;
+  text-align: left;
+  border-radius: 14px;
+  background:
+    linear-gradient(160deg, rgba(18, 26, 40, 0.8), rgba(5, 9, 17, 0.86));
+  border-color: rgba(255, 198, 82, 0.2);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 14px 30px rgba(0, 0, 0, 0.24);
+}
+
+.yellow-player-card .tracker-header {
+  font-size: 12px;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  letter-spacing: 0.2em;
+}
+
+.yellow-player-card .tracker-list {
+  gap: 5px;
+}
+
+.yellow-player-card .move-entry {
+  font-size: 13px;
+  grid-template-columns: 22px 1fr 1fr;
+  padding: 3px 0;
+}
+
 @media (min-width: 601px) {
   .red-player-card:has(.coach-panel:not(.hidden)) {
     justify-content: flex-start;
@@ -1701,10 +1770,6 @@ body {
 }
 
 @media (min-width: 1101px) {
-  .move-tracker {
-    display: none;
-  }
-
   .bottom-bar {
     width: min(1120px, calc(100vw - 160px));
     max-width: none;
@@ -1726,6 +1791,111 @@ body {
 
   .side-card {
     min-height: 0;
+  }
+}
+
+@media (min-width: 701px) and (max-width: 1180px) {
+  :root {
+    --cell-size: min(10.5vw, 7.6vh, 78px);
+    --token-size: calc(var(--cell-size) * 0.72);
+  }
+
+  .game-container {
+    max-width: 980px;
+    padding: 22px 28px 34px;
+    gap: 16px;
+  }
+
+  .logo h1 {
+    font-size: clamp(44px, 6.2vw, 58px);
+    letter-spacing: 0.22em;
+  }
+
+  .turn-pill {
+    min-width: min(460px, 80vw);
+  }
+
+  .game-main-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 18px 24px;
+    align-items: start;
+  }
+
+  .board-column-layout {
+    grid-column: 1 / -1;
+    order: -1;
+    gap: 14px;
+  }
+
+  .side-panel {
+    min-height: 0;
+    width: 100%;
+  }
+
+  .side-card {
+    min-height: 280px;
+    border-radius: 22px;
+  }
+
+  .red-player-card,
+  .yellow-player-card {
+    padding-top: 20px;
+    padding-bottom: 152px;
+  }
+
+  .red-player-card .avatar-container,
+  .yellow-player-card .avatar-container {
+    width: 72px;
+    height: 72px;
+    margin-bottom: 8px;
+  }
+
+  .red-player-card .avatar-initial,
+  .yellow-player-card .avatar-initial {
+    font-size: 36px;
+  }
+
+  .red-player-card h2,
+  .yellow-player-card h2 {
+    font-size: 18px;
+  }
+
+  .red-player-card .score-num,
+  .yellow-player-card .score-num {
+    font-size: 44px;
+  }
+
+  .red-player-card .coach-panel,
+  .yellow-player-card .move-tracker {
+    left: 18px;
+    right: 18px;
+    bottom: 18px;
+    height: 118px;
+    max-height: 118px;
+    padding: 12px 14px;
+  }
+
+  .bottom-bar {
+    width: 100%;
+    max-width: 920px;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .control-btn,
+  .center-timer {
+    min-width: 0;
+    width: 100%;
+    margin: 0;
+    font-size: 15px;
+    padding-inline: 12px;
+  }
+
+  .center-timer {
+    min-width: 0;
   }
 }
 
@@ -1796,7 +1966,19 @@ body {
     flex: 0 0 auto;
   }
 
+  .red-player-card .avatar-container,
+  .yellow-player-card .avatar-container {
+    width: 58px;
+    height: 58px;
+    margin: 0;
+  }
+
   .avatar-initial {
+    font-size: 31px;
+  }
+
+  .red-player-card .avatar-initial,
+  .yellow-player-card .avatar-initial {
     font-size: 31px;
   }
 
@@ -1809,6 +1991,11 @@ body {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  .red-player-card h2,
+  .yellow-player-card h2 {
+    font-size: 15px;
   }
 
   .score-divider {
@@ -1825,6 +2012,11 @@ body {
   }
 
   .score-num {
+    font-size: 40px;
+  }
+
+  .red-player-card .score-num,
+  .yellow-player-card .score-num {
     font-size: 40px;
   }
 
@@ -1860,14 +2052,17 @@ body {
     border-radius: 18px;
   }
 
-  .red-player-card {
+  .red-player-card,
+  .yellow-player-card {
     flex-wrap: wrap;
   }
 
-  .red-player-card .coach-panel {
+  .red-player-card .coach-panel,
+  .yellow-player-card .move-tracker {
     position: static;
     flex: 1 0 100%;
     max-height: 150px;
+    height: auto;
     margin-top: 4px;
     width: 100%;
   }
