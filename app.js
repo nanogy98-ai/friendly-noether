@@ -339,7 +339,6 @@ class Game {
     this.drawsStat = document.getElementById('draws-stat');
     this.clearStats = document.getElementById('clear-stats');
     this.clearAlltimeBtn = document.getElementById('clear-alltime');
-    this.themeToggle = document.getElementById('theme-toggle');
     
     // Win overlay
     this.winOverlay = document.getElementById('win-overlay');
@@ -516,13 +515,6 @@ class Game {
       this.soundBtn.classList.toggle('sound-active', this.sounds.enabled);
       localStorage.setItem('sound', this.sounds.enabled ? 'on' : 'off');
       this.sounds.playClick();
-    });
-    
-    this.themeToggle.addEventListener('click', () => {
-      this.sounds.playClick();
-      document.body.classList.toggle('light-theme');
-      document.body.classList.toggle('dark-theme');
-      localStorage.setItem('theme', document.body.classList.contains('light-theme') ? 'light' : 'dark');
     });
     
     // Clear Scorecard Stats

@@ -13,12 +13,7 @@
   <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.2/dist/peerjs.min.js"></script>
 </head>
 <body class="dark-theme">
-  <!-- Glowing background shapes -->
-  <div class="glow-bg">
-    <div class="blob blob-1"></div>
-    <div class="blob blob-2"></div>
-    <div class="blob blob-3"></div>
-  </div>
+
 
   <div class="game-container">
     <!-- Header -->
@@ -33,46 +28,7 @@
         <h1>CONNECT <span class="logo-accent">4</span></h1>
       </div>
       
-      <div class="header-controls">
-        <button id="theme-toggle" class="icon-btn" title="Toggle Theme" aria-label="Toggle Theme">
-          <svg class="sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="5"></circle>
-            <line x1="12" y1="1" x2="12" y2="3"></line>
-            <line x1="12" y1="21" x2="12" y2="23"></line>
-            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-            <line x1="1" y1="12" x2="3" y2="12"></line>
-            <line x1="21" y1="12" x2="23" y2="12"></line>
-            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
-            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
-          </svg>
-          <svg class="moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-          </svg>
-        </button>
-        <button id="stats-toggle" class="icon-btn" title="Show Stats" aria-label="Show Stats">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path>
-            <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path>
-            <path d="M4 22h16"></path>
-            <path d="M10 14.66V17c0 .55-.45 1-1 1H4v2h16v-2h-5c-.55 0-1-.45-1-1v-2.34"></path>
-            <path d="M12 2a4 4 0 0 0-4 4v7a4 4 0 0 0 8 0V6a4 4 0 0 0-4-4z"></path>
-          </svg>
-        </button>
-        <button id="history-toggle" class="icon-btn" title="Match History" aria-label="Match History">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="18" y1="20" x2="18" y2="10"></line>
-            <line x1="12" y1="20" x2="12" y2="4"></line>
-            <line x1="6" y1="20" x2="6" y2="14"></line>
-          </svg>
-        </button>
-        <button id="settings-toggle" class="icon-btn" title="Settings" aria-label="Settings">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="3"></circle>
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-          </svg>
-        </button>
-      </div>
+
     </header>
 
     <!-- Main Board & Score Cards Grid -->
@@ -81,19 +37,27 @@
       <!-- Left Panel: Red Player -->
       <section class="side-card red-player-card active" id="p1-card">
         <div class="avatar-container red">
-          <svg class="avatar-svg" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"></path>
-          </svg>
+          <span class="avatar-initial">R</span>
         </div>
         <h2 id="p1-label" class="editable-name" title="Double-click to rename">
           <span id="p1-name-text">Red Player</span>
-          <span class="pencil-icon">✏️</span>
         </h2>
+        <div class="score-divider">
+          <span class="divider-dot"></span>
+        </div>
         <div class="score-display">
-          <span class="token-icon red"></span>
+          <span class="score-label">SCORE</span>
           <span class="score-num" id="p1-score">0</span>
         </div>
-        <div class="alltime-wins" id="p1-alltime">All-Time Wins: 0</div>
+        <div class="win-dots-container">
+          <span class="connect-label" id="p1-alltime">CONNECT 4</span>
+          <div class="win-dots">
+            <span class="dot red"></span>
+            <span class="dot red"></span>
+            <span class="dot red"></span>
+            <span class="dot empty"></span>
+          </div>
+        </div>
       </section>
 
       <!-- Center Panel: Turn indicator, Board, and Bottom controls -->
@@ -132,47 +96,47 @@
 
         <!-- Bottom Controls Bar -->
         <div class="bottom-bar">
-          <button id="new-game-btn" class="control-btn primary">
-            <span class="btn-icon">+</span>
+          <button id="new-game-btn" class="control-btn secondary">
+            <svg class="btn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line>
+            </svg>
             <span>New Game</span>
           </button>
           
           <button id="undo-btn" class="control-btn secondary" disabled>
-            <svg class="btn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <svg class="btn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M3 7v6h6"></path>
               <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path>
             </svg>
             <span>Undo</span>
           </button>
           
-          <button id="hint-btn" class="control-btn secondary">
-            <svg class="btn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A5 5 0 0 0 8 8c0 1 .3 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"></path>
-              <line x1="9" y1="18" x2="15" y2="18"></line>
-              <line x1="10" y1="22" x2="14" y2="22"></line>
-            </svg>
-            <span>Hint</span>
-          </button>
-          
-          <button id="sound-btn" class="control-btn secondary-icon" title="Toggle Sound">
-            <svg class="sound-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-              <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
-            </svg>
-            <svg class="sound-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-              <line x1="23" y1="9" x2="17" y2="15"></line>
-              <line x1="17" y1="9" x2="23" y2="15"></line>
-            </svg>
-          </button>
-          
-          <div class="timer-box">
+          <div class="timer-box center-timer">
             <svg class="timer-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="10"></circle>
               <polyline points="12 6 12 12 16 14"></polyline>
             </svg>
             <span id="game-timer">00:00</span>
           </div>
+          
+          <button id="hint-btn" class="control-btn secondary">
+            <svg class="btn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A5 5 0 0 0 8 8c0 1 .3 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"></path>
+              <line x1="9" y1="18" x2="15" y2="18"></line>
+              <line x1="10" y1="22" x2="14" y2="22"></line>
+            </svg>
+            <span>Hint</span>
+          </button>
+
+          <button id="settings-toggle" class="control-btn secondary">
+            <svg class="btn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+            <span>Settings</span>
+          </button>
+          
+          <button id="sound-btn" class="control-btn secondary" style="display: none;">Sound</button>
         </div>
 
       </section>
@@ -180,19 +144,27 @@
       <!-- Right Panel: Yellow Player -->
       <section class="side-card yellow-player-card" id="p2-card">
         <div class="avatar-container yellow">
-          <svg class="avatar-svg" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"></path>
-          </svg>
+          <span class="avatar-initial">Y</span>
         </div>
         <h2 id="p2-label" class="editable-name" title="Double-click to rename">
           <span id="p2-name-text">Yellow Player</span>
-          <span class="pencil-icon">✏️</span>
         </h2>
+        <div class="score-divider">
+          <span class="divider-dot"></span>
+        </div>
         <div class="score-display">
-          <span class="token-icon yellow"></span>
+          <span class="score-label">SCORE</span>
           <span class="score-num" id="p2-score">0</span>
         </div>
-        <div class="alltime-wins" id="p2-alltime">All-Time Wins: 0</div>
+        <div class="win-dots-container">
+          <span class="connect-label" id="p2-alltime">CONNECT 4</span>
+          <div class="win-dots">
+            <span class="dot yellow"></span>
+            <span class="dot yellow"></span>
+            <span class="dot yellow"></span>
+            <span class="dot empty"></span>
+          </div>
+        </div>
       </section>
 
     </main>
