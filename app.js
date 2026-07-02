@@ -344,8 +344,6 @@ class Game {
     this.winOverlay = document.getElementById('win-overlay');
     this.winTitle = document.getElementById('win-title');
     this.winSubtitle = document.getElementById('win-subtitle');
-    this.winPlayAgain = document.getElementById('win-play-again');
-    this.winClose = document.getElementById('win-close');
     this.winEmoji = document.getElementById('win-emoji');
     
     // Populate board cell covers
@@ -534,18 +532,6 @@ class Game {
       }
     });
     
-    // Win Overlay Modal clicks
-    this.winPlayAgain.addEventListener('click', () => {
-      this.sounds.playClick();
-      this.winOverlay.classList.add('hidden');
-      this.confetti.stop();
-      this.restartGame();
-    });
-    this.winClose.addEventListener('click', () => {
-      this.sounds.playClick();
-      this.winOverlay.classList.add('hidden');
-      this.confetti.stop();
-    });
   }
   
   setupTheme() {
@@ -772,8 +758,11 @@ class Game {
       
       setTimeout(() => {
         this.winOverlay.classList.remove('hidden');
+        setTimeout(() => {
+          this.winOverlay.classList.add('hidden');
+          this.confetti.stop();
+        }, 3500);
       }, 750);
-      
     } else if (this.isBoardFull()) {
       this.gameOver = true;
       this.pauseTimer();
@@ -791,6 +780,9 @@ class Game {
       
       setTimeout(() => {
         this.winOverlay.classList.remove('hidden');
+        setTimeout(() => {
+          this.winOverlay.classList.add('hidden');
+        }, 3500);
       }, 750);
       
     } else {

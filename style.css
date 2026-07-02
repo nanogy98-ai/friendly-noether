@@ -764,20 +764,18 @@ body {
   animation: hint-pulse 0.5s ease-in-out 4; /* flash 4 times */
 }
 
-/* Win Overlay Modal */
+/* Win Overlay Modal (Now a subtle toast) */
 .win-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background: rgba(4, 6, 15, 0.7);
-  backdrop-filter: blur(8px);
+  position: absolute;
+  top: 30%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   z-index: 100;
   display: flex;
   justify-content: center;
   align-items: center;
   transition: opacity var(--tr-normal) var(--smooth-easing);
+  pointer-events: none;
 }
 
 .win-overlay.hidden {
@@ -786,29 +784,27 @@ body {
 }
 
 .win-card {
-  background: rgba(10, 15, 30, 0.9);
-  border: 1.5px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.6), 0 0 40px rgba(0, 102, 255, 0.15);
-  border-radius: 28px;
-  padding: 40px;
-  width: 90%;
-  max-width: 440px;
+  background: rgba(10, 15, 30, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7), 0 0 30px rgba(0, 102, 255, 0.2);
+  border-radius: 20px;
+  padding: 20px 40px;
   text-align: center;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 20px;
-  transform: scale(1);
+  gap: 10px;
+  transform: scale(1) translateY(0);
   transition: transform var(--tr-normal) var(--bounce-easing);
   backdrop-filter: blur(20px);
 }
 
 .win-overlay.hidden .win-card {
-  transform: scale(0.8);
+  transform: scale(0.9) translateY(20px);
 }
 
 .win-emoji {
-  font-size: 64px;
+  font-size: 48px;
   animation: bounce-loop 1.8s infinite;
 }
 
@@ -818,9 +814,9 @@ body {
 }
 
 .win-card h2 {
-  font-size: 30px;
-  font-weight: 800;
-  letter-spacing: -0.5px;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
 }
 
 .win-card p {
@@ -828,16 +824,7 @@ body {
   font-size: 15px;
 }
 
-.win-buttons {
-  display: flex;
-  gap: 12px;
-  width: 100%;
-  margin-top: 10px;
-}
 
-.win-buttons button {
-  flex: 1;
-}
 
 .text-center {
   align-self: center;
