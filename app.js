@@ -1648,7 +1648,7 @@ class Game {
     
     this.coachPanel.classList.remove('hidden');
     this.coachMessage.textContent = "Analyzing...";
-    this.coachIcon.textContent = "🧠";
+    this.coachIcon.textContent = "◇";
     
     const opponent = player === 1 ? 2 : 1;
     
