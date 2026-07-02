@@ -346,6 +346,13 @@ class Game {
     this.winSubtitle = document.getElementById('win-subtitle');
     this.winEmoji = document.getElementById('win-emoji');
     
+    // Coach and Move Tracker
+    this.coachPanel = document.getElementById('coach-panel');
+    this.coachIcon = document.getElementById('coach-icon');
+    this.coachMessage = document.getElementById('coach-message');
+    this.trackerList = document.getElementById('tracker-list');
+    this.moveCount = 1;
+    
     // Populate board cell covers
     this.boardCover.innerHTML = '';
     for (let r = 0; r < this.rows; r++) {
@@ -676,6 +683,13 @@ class Game {
     const row = this.getNextOpenRow(this.board, col);
     if (row === -1) return; 
     
+    // Coach evaluation (async so it doesn't block move drop)
+    const boardClone = JSON.parse(JSON.stringify(this.board));
+    const player = this.activePlayer;
+    setTimeout(() => {
+      this.evaluateMoveForCoach(boardClone, player, col);
+    }, 10);
+    
     if (this.gameMode === 'online') {
       if (this.peerConn) {
         this.peerConn.send({ type: 'move', col: col });
@@ -689,6 +703,9 @@ class Game {
   makeMove(row, col) {
     this.board[row][col] = this.activePlayer;
     this.moveHistory.push({ row, col, player: this.activePlayer });
+    
+    const colLetter = String.fromCharCode(65 + col);
+    this.updateMoveTracker(colLetter, this.activePlayer);
     
     this.sounds.playDrop(row);
     
@@ -1510,6 +1527,129 @@ class Game {
     this.saveStats();
     this.saveActiveGameState();
     this.renderScores();
+  }
+
+  // ================= MOVE TRACKER AND COACH =================
+  
+  updateMoveTracker(colLetter, player) {
+    if (!this.trackerList) return;
+    
+    if (player === 1) {
+      const entry = document.createElement('div');
+      entry.className = 'move-entry';
+      entry.id = `move-${this.moveCount}`;
+      
+      const numSpan = document.createElement('span');
+      numSpan.className = 'move-num';
+      numSpan.textContent = `${this.moveCount}.`;
+      
+      const p1Span = document.createElement('span');
+      p1Span.className = 'move-p1';
+      p1Span.textContent = colLetter;
+      
+      const p2Span = document.createElement('span');
+      p2Span.className = 'move-p2';
+      
+      entry.appendChild(numSpan);
+      entry.appendChild(p1Span);
+      entry.appendChild(p2Span);
+      
+      this.trackerList.appendChild(entry);
+      this.trackerList.scrollTop = this.trackerList.scrollHeight;
+    } else {
+      const entry = document.getElementById(`move-${this.moveCount}`);
+      if (entry) {
+        const p2Span = entry.querySelector('.move-p2');
+        if (p2Span) p2Span.textContent = colLetter;
+      }
+      this.moveCount++;
+    }
+  }
+
+  evaluateMoveForCoach(boardState, player, chosenCol) {
+    if (!this.coachPanel) return;
+    
+    this.coachPanel.classList.remove('hidden');
+    this.coachMessage.textContent = "Analyzing...";
+    this.coachIcon.textContent = "🧠";
+    
+    // Simulate what the AI thinks is the best move
+    const depth = 4; // Deep enough for insight, shallow enough for performance
+    let bestScore = player === 2 ? -Infinity : Infinity;
+    let bestCol = -1;
+    
+    const validMoves = this.getValidMoves(boardState);
+    if (validMoves.length === 0) return;
+    
+    for (let col of validMoves) {
+      const row = this.getNextOpenRow(boardState, col);
+      boardState[row][col] = player;
+      const nextIsMaximizing = player === 1;
+      const score = this.minimax(boardState, depth - 1, -Infinity, Infinity, nextIsMaximizing);
+      boardState[row][col] = 0;
+      
+      if (player === 2) {
+        if (score > bestScore) { bestScore = score; bestCol = col; }
+      } else {
+        if (score < bestScore) { bestScore = score; bestCol = col; }
+      }
+    }
+    
+    if (chosenCol === bestCol) {
+      // Evaluate if it's a winning move
+      const testBoard = JSON.parse(JSON.stringify(boardState));
+      const testRow = this.getNextOpenRow(testBoard, chosenCol);
+      testBoard[testRow][chosenCol] = player;
+      const winCheck = this.checkWinCondition(testBoard);
+      
+      if (winCheck) {
+        this.coachIcon.textContent = "🌟";
+        this.coachMessage.textContent = "Brilliant! You found the winning sequence.";
+      } else {
+        this.coachIcon.textContent = "⭐";
+        this.coachMessage.textContent = "Best Move! You found the optimal continuation.";
+      }
+    } else {
+      // Check if chosen move was a blunder (allows opponent to win)
+      const testBoard = JSON.parse(JSON.stringify(boardState));
+      const testRow = this.getNextOpenRow(testBoard, chosenCol);
+      testBoard[testRow][chosenCol] = player;
+      
+      const opponent = player === 1 ? 2 : 1;
+      const oppValidMoves = this.getValidMoves(testBoard);
+      let isBlunder = false;
+      
+      for (let oppCol of oppValidMoves) {
+        const oppRow = this.getNextOpenRow(testBoard, oppCol);
+        if (oppRow === -1) continue;
+        testBoard[oppRow][oppCol] = opponent;
+        if (this.checkWinCondition(testBoard)) {
+          isBlunder = true;
+        }
+        testBoard[oppRow][oppCol] = 0;
+      }
+      
+      if (isBlunder) {
+        this.coachIcon.textContent = "❌";
+        this.coachMessage.textContent = "Blunder! You missed a critical threat.";
+      } else {
+        this.coachIcon.textContent = "❓";
+        this.coachMessage.textContent = `Inaccuracy. A better move was column ${String.fromCharCode(65 + bestCol)}.`;
+      }
+    }
+    
+    // Add evaluation icon to tracker list
+    const moveId = player === 1 ? this.moveCount : this.moveCount - 1;
+    const entry = document.getElementById(`move-${moveId}`);
+    if (entry) {
+      const targetSpan = entry.querySelector(player === 1 ? '.move-p1' : '.move-p2');
+      if (targetSpan && !targetSpan.querySelector('.move-eval')) {
+        const evalSpan = document.createElement('span');
+        evalSpan.className = 'move-eval';
+        evalSpan.textContent = this.coachIcon.textContent;
+        targetSpan.appendChild(evalSpan);
+      }
+    }
   }
 }
 

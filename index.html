@@ -34,31 +34,42 @@
     <!-- Main Board & Score Cards Grid -->
     <main class="game-main-layout">
       
-      <!-- Left Panel: Red Player -->
-      <section class="side-card red-player-card active" id="p1-card">
-        <div class="avatar-container red">
-          <span class="avatar-initial">R</span>
-        </div>
-        <h2 id="p1-label" class="editable-name" title="Double-click to rename">
-          <span id="p1-name-text">Red Player</span>
-        </h2>
-        <div class="score-divider">
-          <span class="divider-dot"></span>
-        </div>
-        <div class="score-display">
-          <span class="score-label">SCORE</span>
-          <span class="score-num" id="p1-score">0</span>
-        </div>
-        <div class="win-dots-container">
-          <span class="connect-label" id="p1-alltime">CONNECT 4</span>
-          <div class="win-dots">
-            <span class="dot red"></span>
-            <span class="dot red"></span>
-            <span class="dot red"></span>
-            <span class="dot empty"></span>
+      <!-- Left Panel: Red Player & Coach -->
+      <aside class="side-panel">
+        <section class="side-card red-player-card active" id="p1-card">
+          <div class="avatar-container red">
+            <span class="avatar-initial">R</span>
           </div>
+          <h2 id="p1-label" class="editable-name" title="Double-click to rename">
+            <span id="p1-name-text">Red Player</span>
+          </h2>
+          <div class="score-divider">
+            <span class="divider-dot"></span>
+          </div>
+          <div class="score-display">
+            <span class="score-label">SCORE</span>
+            <span class="score-num" id="p1-score">0</span>
+          </div>
+          <div class="win-dots-container">
+            <span class="connect-label" id="p1-alltime">CONNECT 4</span>
+            <div class="win-dots">
+              <span class="dot red"></span>
+              <span class="dot red"></span>
+              <span class="dot red"></span>
+              <span class="dot empty"></span>
+            </div>
+          </div>
+        </section>
+
+        <!-- AI Coach Panel -->
+        <div id="coach-panel" class="coach-panel hidden">
+          <div class="coach-header">
+            <span class="coach-icon" id="coach-icon">🧠</span>
+            <span class="coach-title">AI Coach</span>
+          </div>
+          <p id="coach-message" class="coach-message">Waiting for your move...</p>
         </div>
-      </section>
+      </aside>
 
       <!-- Center Panel: Turn indicator, Board, and Bottom controls -->
       <section class="board-column-layout">
@@ -141,31 +152,41 @@
 
       </section>
 
-      <!-- Right Panel: Yellow Player -->
-      <section class="side-card yellow-player-card" id="p2-card">
-        <div class="avatar-container yellow">
-          <span class="avatar-initial">Y</span>
-        </div>
-        <h2 id="p2-label" class="editable-name" title="Double-click to rename">
-          <span id="p2-name-text">Yellow Player</span>
-        </h2>
-        <div class="score-divider">
-          <span class="divider-dot"></span>
-        </div>
-        <div class="score-display">
-          <span class="score-label">SCORE</span>
-          <span class="score-num" id="p2-score">0</span>
-        </div>
-        <div class="win-dots-container">
-          <span class="connect-label" id="p2-alltime">CONNECT 4</span>
-          <div class="win-dots">
-            <span class="dot yellow"></span>
-            <span class="dot yellow"></span>
-            <span class="dot yellow"></span>
-            <span class="dot empty"></span>
+      <!-- Right Panel: Yellow Player & Move Tracker -->
+      <aside class="side-panel">
+        <section class="side-card yellow-player-card" id="p2-card">
+          <div class="avatar-container yellow">
+            <span class="avatar-initial">Y</span>
+          </div>
+          <h2 id="p2-label" class="editable-name" title="Double-click to rename">
+            <span id="p2-name-text">Yellow Player</span>
+          </h2>
+          <div class="score-divider">
+            <span class="divider-dot"></span>
+          </div>
+          <div class="score-display">
+            <span class="score-label">SCORE</span>
+            <span class="score-num" id="p2-score">0</span>
+          </div>
+          <div class="win-dots-container">
+            <span class="connect-label" id="p2-alltime">CONNECT 4</span>
+            <div class="win-dots">
+              <span class="dot yellow"></span>
+              <span class="dot yellow"></span>
+              <span class="dot yellow"></span>
+              <span class="dot empty"></span>
+            </div>
+          </div>
+        </section>
+
+        <!-- Move Tracker -->
+        <div id="move-tracker" class="move-tracker">
+          <div class="tracker-header">Move History</div>
+          <div class="tracker-list" id="tracker-list">
+            <!-- Moves will be appended here -->
           </div>
         </div>
-      </section>
+      </aside>
 
     </main>
   </div>

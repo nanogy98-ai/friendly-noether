@@ -104,6 +104,14 @@ body {
   flex-grow: 1;
 }
 
+/* Sidebar Layouts */
+.side-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+}
+
 /* Sidebar Score Cards */
 .side-card {
   background: rgba(14, 21, 43, 0.4);
@@ -131,6 +139,92 @@ body {
   border-left: 1px solid rgba(255, 188, 0, 0.2);
   border-right: 1px solid rgba(255, 188, 0, 0.2);
 }
+
+/* Coach and Tracker Panels */
+.coach-panel, .move-tracker {
+  background: rgba(14, 21, 43, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(var(--blur-amount));
+  border-radius: 16px;
+  padding: 15px;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.4);
+  transition: all var(--tr-normal);
+}
+
+.coach-panel.hidden {
+  opacity: 0;
+  transform: translateY(-10px);
+  pointer-events: none;
+}
+
+.coach-header, .tracker-header {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 8px;
+}
+
+.coach-message {
+  font-size: 15px;
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+
+.move-tracker {
+  height: 250px;
+  display: flex;
+  flex-direction: column;
+}
+
+.tracker-list {
+  flex-grow: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-right: 5px;
+}
+
+.tracker-list::-webkit-scrollbar {
+  width: 6px;
+}
+.tracker-list::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+.tracker-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+.move-entry {
+  display: grid;
+  grid-template-columns: 24px 1fr 1fr;
+  font-size: 14px;
+  color: var(--text-secondary);
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.move-entry:last-child {
+  border-bottom: none;
+}
+
+.move-num {
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.move-p1 { color: var(--p1-color); }
+.move-p2 { color: var(--p2-color); }
+.move-eval { margin-left: 4px; font-size: 12px; }
 
 .avatar-container {
   width: 90px;
