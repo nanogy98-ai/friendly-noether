@@ -1431,8 +1431,10 @@ class Game {
   evaluateBoard(board) {
     let score = 0;
     const centerCol = 3;
-    const centerCount = this.countInCol(board, centerCol, 2);
-    score += centerCount * 4;
+    const aiCenterCount = this.countInCol(board, centerCol, 2);
+    const humanCenterCount = this.countInCol(board, centerCol, 1);
+    score += (aiCenterCount * 4);
+    score -= (humanCenterCount * 4);
     
     for (let r = 0; r < this.rows; r++) {
       for (let c = 0; c <= this.cols - 4; c++) {
@@ -1573,13 +1575,36 @@ class Game {
     this.coachMessage.textContent = "Analyzing...";
     this.coachIcon.textContent = "🧠";
     
-    // Simulate what the AI thinks is the best move
-    const depth = 4; // Deep enough for insight, shallow enough for performance
-    let bestScore = player === 2 ? -Infinity : Infinity;
-    let bestCol = -1;
+    const opponent = player === 1 ? 2 : 1;
     
+    // 1. Did the player have an immediate winning move available?
+    let playerWinningCol = -1;
     const validMoves = this.getValidMoves(boardState);
     if (validMoves.length === 0) return;
+    
+    for (let col of validMoves) {
+      const row = this.getNextOpenRow(boardState, col);
+      boardState[row][col] = player;
+      if (this.checkWinCondition(boardState)) playerWinningCol = col;
+      boardState[row][col] = 0;
+    }
+    
+    // 2. Did the opponent have an immediate winning move available (that we needed to block)?
+    let opponentWinningCol = -1;
+    for (let col of validMoves) {
+      const row = this.getNextOpenRow(boardState, col);
+      boardState[row][col] = opponent;
+      if (this.checkWinCondition(boardState)) opponentWinningCol = col;
+      boardState[row][col] = 0;
+    }
+    
+    // 3. What does Minimax think are the best moves?
+    const depth = 4;
+    let bestScore = player === 2 ? -Infinity : Infinity;
+    let bestMoves = [];
+    
+    // Sort to prioritize center column in case of score ties
+    validMoves.sort((a, b) => Math.abs(a - 3) - Math.abs(b - 3));
     
     for (let col of validMoves) {
       const row = this.getNextOpenRow(boardState, col);
@@ -1589,54 +1614,71 @@ class Game {
       boardState[row][col] = 0;
       
       if (player === 2) {
-        if (score > bestScore) { bestScore = score; bestCol = col; }
+        if (score > bestScore) { bestScore = score; bestMoves = [col]; }
+        else if (score === bestScore) { bestMoves.push(col); }
       } else {
-        if (score < bestScore) { bestScore = score; bestCol = col; }
+        if (score < bestScore) { bestScore = score; bestMoves = [col]; }
+        else if (score === bestScore) { bestMoves.push(col); }
       }
     }
     
-    if (chosenCol === bestCol) {
-      // Evaluate if it's a winning move
-      const testBoard = JSON.parse(JSON.stringify(boardState));
-      const testRow = this.getNextOpenRow(testBoard, chosenCol);
-      testBoard[testRow][chosenCol] = player;
-      const winCheck = this.checkWinCondition(testBoard);
-      
-      if (winCheck) {
-        this.coachIcon.textContent = "🌟";
-        this.coachMessage.textContent = "Brilliant! You found the winning sequence.";
-      } else {
-        this.coachIcon.textContent = "⭐";
-        this.coachMessage.textContent = "Best Move! You found the optimal continuation.";
-      }
-    } else {
-      // Check if chosen move was a blunder (allows opponent to win)
-      const testBoard = JSON.parse(JSON.stringify(boardState));
-      const testRow = this.getNextOpenRow(testBoard, chosenCol);
-      testBoard[testRow][chosenCol] = player;
-      
-      const opponent = player === 1 ? 2 : 1;
+    let icon = "";
+    let msg = "";
+    
+    // 4. Evaluate the actual move made
+    const testBoard = JSON.parse(JSON.stringify(boardState));
+    const testRow = this.getNextOpenRow(testBoard, chosenCol);
+    testBoard[testRow][chosenCol] = player;
+    const playerWonNow = this.checkWinCondition(testBoard);
+    
+    if (playerWonNow) {
+      icon = "🌟";
+      msg = "Brilliant! You found the winning sequence.";
+    } 
+    else if (playerWinningCol !== -1 && chosenCol !== playerWinningCol) {
+      icon = "❌";
+      msg = `Blunder! You missed a guaranteed win in column ${String.fromCharCode(65 + playerWinningCol)}!`;
+    }
+    else if (opponentWinningCol !== -1 && chosenCol !== opponentWinningCol) {
+      icon = "❌";
+      msg = `Blunder! You failed to block the opponent's winning threat in column ${String.fromCharCode(65 + opponentWinningCol)}!`;
+    }
+    else {
+      // Check if chosen move creates an immediate loss
+      let gaveOpponentWinCol = -1;
       const oppValidMoves = this.getValidMoves(testBoard);
-      let isBlunder = false;
-      
       for (let oppCol of oppValidMoves) {
         const oppRow = this.getNextOpenRow(testBoard, oppCol);
         if (oppRow === -1) continue;
         testBoard[oppRow][oppCol] = opponent;
         if (this.checkWinCondition(testBoard)) {
-          isBlunder = true;
+          gaveOpponentWinCol = oppCol;
         }
         testBoard[oppRow][oppCol] = 0;
       }
       
-      if (isBlunder) {
-        this.coachIcon.textContent = "❌";
-        this.coachMessage.textContent = "Blunder! You missed a critical threat.";
-      } else {
-        this.coachIcon.textContent = "❓";
-        this.coachMessage.textContent = `Inaccuracy. A better move was column ${String.fromCharCode(65 + bestCol)}.`;
+      if (gaveOpponentWinCol !== -1) {
+        icon = "❌";
+        msg = `Blunder! This allows your opponent to win immediately by playing in column ${String.fromCharCode(65 + gaveOpponentWinCol)}.`;
+      }
+      else if (bestMoves.includes(chosenCol)) {
+        icon = "⭐";
+        msg = "Best Move! You found the optimal continuation.";
+      }
+      else {
+        // It's an inaccuracy.
+        const bestCol = bestMoves[0];
+        icon = "❓";
+        if (Math.abs(bestCol - 3) < Math.abs(chosenCol - 3)) {
+          msg = `Inaccuracy. Column ${String.fromCharCode(65 + bestCol)} was better because it controls the center of the board more effectively.`;
+        } else {
+          msg = `Inaccuracy. Column ${String.fromCharCode(65 + bestCol)} builds a mathematically stronger position for future attacks.`;
+        }
       }
     }
+    
+    this.coachIcon.textContent = icon;
+    this.coachMessage.textContent = msg;
     
     // Add evaluation icon to tracker list
     const moveId = player === 1 ? this.moveCount : this.moveCount - 1;
