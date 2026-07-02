@@ -8,7 +8,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=2">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23060b1c'/%3E%3Ccircle cx='24' cy='24' r='9' fill='%23ff2a2a'/%3E%3Ccircle cx='40' cy='24' r='9' fill='%23ffbc00'/%3E%3Ccircle cx='24' cy='40' r='9' fill='%23ffbc00'/%3E%3Ccircle cx='40' cy='40' r='9' fill='%23ff2a2a'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css?v=4">
   <!-- PeerJS Client Library for serverless WebRTC Peer-to-Peer online multiplayer -->
   <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.2/dist/peerjs.min.js"></script>
 </head>
@@ -61,11 +62,11 @@
           </div>
         </section>
 
-        <!-- AI Coach Panel -->
+        <!-- Move Coach Panel -->
         <div id="coach-panel" class="coach-panel hidden">
           <div class="coach-header">
-            <span class="coach-icon" id="coach-icon">🧠</span>
-            <span class="coach-title">AI Coach</span>
+            <span class="coach-icon" id="coach-icon">◇</span>
+            <span class="coach-title">Move Coach</span>
           </div>
           <p id="coach-message" class="coach-message">Waiting for your move...</p>
         </div>
@@ -76,7 +77,7 @@
         
         <!-- Active Turn Indicator Pill -->
         <div class="turn-pill-wrapper">
-          <div class="turn-pill" id="turn-pill">
+          <div class="turn-pill" id="turn-pill" aria-live="polite">
             <span class="turn-color-indicator" id="turn-color-indicator"></span>
             <span id="turn-text">Your Turn</span>
           </div>
@@ -96,7 +97,7 @@
             <div class="col-arrow" data-col="6">▼</div>
           </div>
           
-          <div id="board" class="board">
+          <div id="board" class="board" role="group" aria-label="Connect Four board. Choose a column to drop a token.">
             <div class="board-back"></div>
             <div id="tokens-container" class="tokens-container"></div>
             <div id="board-cover" class="board-cover"></div>
@@ -192,12 +193,12 @@
   </div>
 
   <!-- Settings Slide-out Drawer -->
-  <div id="settings-drawer" class="drawer hidden">
+  <div id="settings-drawer" class="drawer hidden" role="dialog" aria-modal="true" aria-labelledby="settings-title">
     <div class="drawer-overlay"></div>
     <div class="drawer-content">
       <div class="drawer-header">
-        <h2>Game Settings</h2>
-        <button id="settings-close" class="close-btn">&times;</button>
+        <h2 id="settings-title">Game Settings</h2>
+        <button id="settings-close" class="close-btn" aria-label="Close settings">&times;</button>
       </div>
       <div class="drawer-body">
         
@@ -205,9 +206,9 @@
         <div class="setting-item">
           <label>Game Mode</label>
           <div class="mode-selectors-vertical">
-            <button id="mode-pvp" class="mode-btn active" data-mode="pvp">👥 Pass & Play</button>
-            <button id="mode-pve" class="mode-btn" data-mode="pve">🤖 Vs Quantum AI</button>
-            <button id="mode-online" class="mode-btn" data-mode="online">⚡ Play with a Friend</button>
+            <button id="mode-pvp" class="mode-btn active" data-mode="pvp">Pass & Play</button>
+            <button id="mode-pve" class="mode-btn" data-mode="pve">Vs Computer</button>
+            <button id="mode-online" class="mode-btn" data-mode="online">Play with a Friend</button>
           </div>
         </div>
 
@@ -240,9 +241,9 @@
           </div>
         </div>
 
-        <!-- AI Difficulty selection -->
+        <!-- Computer difficulty selection -->
         <div id="difficulty-group" class="setting-item hidden">
-          <label>AI Difficulty</label>
+          <label>Computer Strength</label>
           <div class="difficulty-selectors">
             <button class="diff-btn" data-diff="easy">Easy</button>
             <button class="diff-btn active" data-diff="medium">Medium</button>
@@ -252,10 +253,10 @@
 
         <!-- Coach Toggle -->
         <div class="setting-item" id="coach-toggle-group">
-          <label>AI Coach</label>
+          <label>Move Coach</label>
           <div class="name-inputs-box" style="display: flex; align-items: center; gap: 10px; cursor: pointer;" onclick="document.getElementById('coach-toggle').click()">
-            <input type="checkbox" id="coach-toggle" checked style="width: 20px; height: 20px; cursor: pointer;" onclick="event.stopPropagation()">
-            <span style="font-weight: 500; font-size: 15px;">Enable Real-time Coach</span>
+            <input type="checkbox" id="coach-toggle" style="width: 20px; height: 20px; cursor: pointer;" onclick="event.stopPropagation()">
+            <span style="font-weight: 500; font-size: 15px;">Enable Move Coach</span>
           </div>
         </div>
 
@@ -291,9 +292,9 @@
   </div>
 
   <!-- Win Celebration Overlay -->
-  <div id="win-overlay" class="win-overlay hidden">
+  <div id="win-overlay" class="win-overlay hidden" role="status" aria-live="polite">
     <div class="win-card">
-      <div class="win-emoji" id="win-emoji">🏆</div>
+      <div class="win-emoji" id="win-emoji">4</div>
       <h2 id="win-title">Player 1 Wins!</h2>
       <p id="win-subtitle">A brilliant victory in 18 moves.</p>
     </div>
@@ -302,6 +303,6 @@
   <!-- Canvas for Confetti -->
   <canvas id="confetti-canvas" class="confetti-canvas"></canvas>
 
-  <script src="app.js?v=2"></script>
+  <script src="app.js?v=4"></script>
 </body>
 </html>

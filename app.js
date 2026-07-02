@@ -1,5 +1,5 @@
 /**
- * Quantum Connect Four - Game Logic Engine
+ * Connect Four - Game Logic Engine
  */
 
 // Sound Controller using Web Audio API
@@ -227,11 +227,12 @@ class Game {
     this.board = Array(this.rows).fill(null).map(() => Array(this.cols).fill(0));
     this.activePlayer = 1; // 1 = Red, 2 = Yellow
     this.gameMode = 'pvp'; // 'pvp', 'pve', or 'online'
-    this.coachEnabled = true;
+    this.coachEnabled = false;
     this.difficulty = 'medium'; // 'easy', 'medium', 'hard'
     this.moveHistory = [];
     this.gameOver = false;
     this.animating = false;
+    this.hoveredCol = null;
     
     
     // WebRTC Online Multiplayer variables
@@ -266,6 +267,7 @@ class Game {
     if (!this.restoreActiveGameState()) {
       this.loadStats();
       this.renderScores();
+      this.updateTurnUI();
       this.startTimer();
     }
     
@@ -366,12 +368,14 @@ class Game {
       }
     }
     
-    // Populate column hitboxes
+    // Populate accessible column controls
     this.columnsContainer.innerHTML = '';
     for (let c = 0; c < this.cols; c++) {
-      const col = document.createElement('div');
+      const col = document.createElement('button');
+      col.type = 'button';
       col.className = 'board-column';
       col.dataset.col = c;
+      col.setAttribute('aria-label', `Drop token in column ${String.fromCharCode(65 + c)}`);
       this.columnsContainer.appendChild(col);
     }
     
@@ -383,21 +387,7 @@ class Game {
     // Column hover and click triggers
     this.columnsContainer.addEventListener('click', (e) => {
       const colEl = e.target.closest('.board-column');
-      if (!colEl || this.gameOver || this.animating) return;
-      
-      // AI blocks player click
-      if (this.gameMode === 'pve' && this.activePlayer === 2) return;
-      
-
-      // Online turn validation
-      if (this.gameMode === 'online') {
-        if (!this.peerConn) return;
-        const myRole = this.isOnlineHost ? 1 : 2;
-        if (this.activePlayer !== myRole) {
-          alert("It's not your turn! Please wait for your opponent.");
-          return;
-        }
-      }
+      if (!colEl || !this.canLocalPlayerAct(true)) return;
       
       const col = parseInt(colEl.dataset.col);
       this.handlePlayerMove(col);
@@ -405,27 +395,9 @@ class Game {
     
     this.columnsContainer.addEventListener('mousemove', (e) => {
       const colEl = e.target.closest('.board-column');
-      if (!colEl || this.gameOver || this.animating) {
+      if (!colEl || !this.canLocalPlayerAct(false)) {
         this.clearPreviews();
         return;
-      }
-      
-      if (this.gameMode === 'pve' && this.activePlayer === 2) {
-        this.clearPreviews();
-        return;
-      }
-      
-
-      if (this.gameMode === 'online') {
-        if (!this.peerConn) {
-          this.clearPreviews();
-          return;
-        }
-        const myRole = this.isOnlineHost ? 1 : 2;
-        if (this.activePlayer !== myRole) {
-          this.clearPreviews();
-          return;
-        }
       }
       
       const col = parseInt(colEl.dataset.col);
@@ -433,7 +405,22 @@ class Game {
     });
     
     this.columnsContainer.addEventListener('mouseleave', () => {
+      this.hoveredCol = null;
       this.clearPreviews();
+    });
+
+    this.columnsContainer.addEventListener('keydown', (e) => {
+      const colEl = e.target.closest('.board-column');
+      if (!colEl) return;
+
+      const currentCol = parseInt(colEl.dataset.col);
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        e.preventDefault();
+        const delta = e.key === 'ArrowLeft' ? -1 : 1;
+        const nextCol = Math.max(0, Math.min(this.cols - 1, currentCol + delta));
+        this.columnsContainer.querySelector(`[data-col="${nextCol}"]`)?.focus();
+        this.showMovePreview(nextCol);
+      }
     });
     
     // Inline renaming double clicks
@@ -570,6 +557,22 @@ class Game {
       document.body.classList.remove('light-theme');
     }
   }
+
+  canLocalPlayerAct(showAlert = false) {
+    if (this.gameOver || this.animating) return false;
+    if (this.gameMode === 'pve' && this.activePlayer === 2) return false;
+
+    if (this.gameMode === 'online') {
+      if (!this.peerConn) return false;
+      const myRole = this.isOnlineHost ? 1 : 2;
+      if (this.activePlayer !== myRole) {
+        if (showAlert) alert("It's not your turn! Please wait for your opponent.");
+        return false;
+      }
+    }
+
+    return true;
+  }
   
   switchMode(mode, targetId = null) {
     if (this.gameMode === mode && mode !== 'online') return;
@@ -598,7 +601,7 @@ class Game {
       this.modePvE.classList.add('active');
       this.difficultyGroup.classList.remove('hidden');
       this.p1NameText.textContent = this.inputP1Name.value.trim() || 'Red Player';
-      this.p2NameText.textContent = 'Quantum AI';
+      this.p2NameText.textContent = 'Computer';
       this.p2NameInputGroup.classList.add('hidden');
     } else if (mode === 'online') {
       this.modeOnline.classList.add('active');
@@ -670,10 +673,12 @@ class Game {
   showMovePreview(col) {
     const row = this.getNextOpenRow(this.board, col);
     if (row === -1) {
+      this.hoveredCol = null;
       this.clearPreviews();
       return;
     }
     
+    this.hoveredCol = col;
     this.previewRow.innerHTML = '';
     const previewTok = document.createElement('div');
     previewTok.className = `preview-token player${this.activePlayer}`;
@@ -781,7 +786,7 @@ class Game {
       const numMoves = this.moveHistory.length;
       this.winTitle.textContent = `${winnerName} Wins!`;
       this.winSubtitle.textContent = `Achieved a brilliant victory in ${numMoves} total moves.`;
-      this.winEmoji.textContent = winInfo.player === 1 ? '🏆' : '🤖';
+      this.winEmoji.textContent = winInfo.player === 1 ? 'R' : 'Y';
       
       setTimeout(() => {
         this.winOverlay.classList.remove('hidden');
@@ -818,21 +823,21 @@ class Game {
       this.saveActiveGameState();
       
       if (!this.gameOver && this.gameMode === 'pve' && this.activePlayer === 2) {
-        this.triggerAIMove();
+        this.triggerComputerMove();
       }
     }
   }
   
-  triggerAIMove() {
+  triggerComputerMove() {
     this.animating = true;
-    this.turnText.textContent = "AI is computing...";
+    this.turnText.textContent = "Computer is thinking...";
     
     setTimeout(() => {
-      const aiCol = this.getBestMoveForPlayer(2);
-      if (aiCol !== null) {
-        const aiRow = this.getNextOpenRow(this.board, aiCol);
+      const computerCol = this.getBestMoveForPlayer(2);
+      if (computerCol !== null) {
+        const computerRow = this.getNextOpenRow(this.board, computerCol);
         this.animating = false;
-        this.makeMove(aiRow, aiCol);
+        this.makeMove(computerRow, computerCol);
       } else {
         this.animating = false;
       }
@@ -886,6 +891,7 @@ class Game {
     document.querySelectorAll('.token').forEach(t => t.classList.remove('winning-token'));
     
     this.updateTurnUI();
+    this.rebuildMoveTracker();
     this.resumeTimer();
     this.saveActiveGameState();
     
@@ -901,41 +907,30 @@ class Game {
     }
   }
   
-  restartGame() {
+  restartGame(options = {}) {
+    const shouldBroadcast = options.broadcast !== false;
+
+    this.board = Array(this.rows).fill(null).map(() => Array(this.cols).fill(0));
+    this.moveHistory = [];
+    this.gameOver = false;
+    this.animating = false;
+    this.activePlayer = 1;
+
+    this.tokensContainer.innerHTML = '';
+    this.previewRow.innerHTML = '';
+    this.resetMoveTracker();
+    this.winOverlay.classList.add('hidden');
+    this.confetti.stop();
+    this.undoBtn.disabled = true;
+
+    this.updateTurnUI();
+    this.startTimer();
+
     if (this.gameMode === 'online') {
-      this.board = Array(this.rows).fill(null).map(() => Array(this.cols).fill(0));
-      this.moveHistory = [];
-      this.gameOver = false;
-      this.animating = false;
-      this.activePlayer = 1;
-      
-      this.tokensContainer.innerHTML = '';
-      this.previewRow.innerHTML = '';
-      this.winOverlay.classList.add('hidden');
-      this.confetti.stop();
-      this.undoBtn.disabled = true;
-      
-      this.updateTurnUI();
-      this.startTimer();
-      
-      if (this.peerConn && this.isOnlineHost) {
+      if (shouldBroadcast && this.peerConn) {
         this.peerConn.send({ type: 'reset' });
       }
     } else {
-      this.board = Array(this.rows).fill(null).map(() => Array(this.cols).fill(0));
-      this.moveHistory = [];
-      this.gameOver = false;
-      this.animating = false;
-      this.activePlayer = 1;
-      
-      this.tokensContainer.innerHTML = '';
-      this.previewRow.innerHTML = '';
-      this.winOverlay.classList.add('hidden');
-      this.confetti.stop();
-      this.undoBtn.disabled = true;
-      
-      this.updateTurnUI();
-      this.startTimer();
       this.saveActiveGameState();
     }
   }
@@ -966,7 +961,15 @@ class Game {
         const myRole = this.isOnlineHost ? 1 : 2;
         this.turnText.textContent = myRole === 2 ? "Your Turn" : `${p2Name}'s Turn`;
       } else {
-        this.turnText.textContent = this.gameMode === 'pvp' ? `${p2Name}'s Turn` : "AI's Turn";
+        this.turnText.textContent = this.gameMode === 'pvp' ? `${p2Name}'s Turn` : "Computer's Turn";
+      }
+    }
+
+    if (this.hoveredCol !== null) {
+      if (this.canLocalPlayerAct(false)) {
+        this.showMovePreview(this.hoveredCol);
+      } else {
+        this.clearPreviews();
       }
     }
   }
@@ -1159,7 +1162,7 @@ class Game {
           break;
           
         case 'reset':
-          this.restartGame();
+          this.restartGame({ broadcast: false });
           break;
           
         case 'timer_sync':
@@ -1257,8 +1260,10 @@ class Game {
     const p1Wins = this.allTimeScores[p1Name] || 0;
     const p2Wins = this.allTimeScores[p2Name] || 0;
     
-    this.p1Alltime.textContent = `All-Time Wins: ${p1Wins}`;
-    this.p2Alltime.textContent = `All-Time Wins: ${p2Wins}`;
+    this.p1Alltime.textContent = 'CONNECT 4';
+    this.p2Alltime.textContent = 'CONNECT 4';
+    this.p1Alltime.setAttribute('title', `${p1Name} lifetime wins: ${p1Wins}`);
+    this.p2Alltime.setAttribute('title', `${p2Name} lifetime wins: ${p2Wins}`);
   }
   
   saveActiveGameState() {
@@ -1272,7 +1277,7 @@ class Game {
       difficulty: this.difficulty,
       scores: this.scores,
       p1_name: this.p1NameText.textContent,
-      p2_name: this.inputP1Name.value,
+      p1_name_input: this.inputP1Name.value,
       p2_name_display: this.p2NameText.textContent,
       p2_name_input: this.inputP2Name.value,
       timerSeconds: this.timerSeconds,
@@ -1300,10 +1305,12 @@ class Game {
       this.timerSeconds = state.timerSeconds;
       this.gameOver = state.gameOver;
       
-      this.p1NameText.textContent = state.p1_name;
-      this.inputP1Name.value = state.p2_name;
-      this.p2NameText.textContent = state.p2_name_display;
-      this.inputP2Name.value = state.p2_name_input;
+      const p1InputName = state.p1_name_input || state.p1_name || 'Red Player';
+      const p2InputName = state.p2_name_input || state.p2_name_display || 'Yellow Player';
+      this.p1NameText.textContent = state.p1_name || p1InputName;
+      this.inputP1Name.value = p1InputName;
+      this.p2NameText.textContent = state.p2_name_display || p2InputName;
+      this.inputP2Name.value = p2InputName;
       
       document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
       if (this.gameMode === 'pvp') {
@@ -1320,6 +1327,7 @@ class Game {
       });
       
       this.tokensContainer.innerHTML = '';
+      this.resetMoveTracker();
       this.moveHistory.forEach(m => {
         const token = document.createElement('div');
         token.className = `token player${m.player}`;
@@ -1329,6 +1337,7 @@ class Game {
         token.style.transform = `translateY(calc(${m.row} * var(--cell-size) + (var(--cell-size) - var(--token-size)) / 2))`;
         this.tokensContainer.appendChild(token);
       });
+      this.rebuildMoveTracker();
       
       this.renderScores();
       this.updateAllTimeScoreUI();
@@ -1352,7 +1361,7 @@ class Game {
     }
   }
   
-  // ================= AI ENGINE =================
+  // ================= COMPUTER STRATEGY =================
   
   getBestMoveForPlayer(player) {
     const validMoves = this.getValidMoves(this.board);
@@ -1441,9 +1450,9 @@ class Game {
   evaluateBoard(board) {
     let score = 0;
     const centerCol = 3;
-    const aiCenterCount = this.countInCol(board, centerCol, 2);
+    const computerCenterCount = this.countInCol(board, centerCol, 2);
     const humanCenterCount = this.countInCol(board, centerCol, 1);
-    score += (aiCenterCount * 4);
+    score += (computerCenterCount * 4);
     score -= (humanCenterCount * 4);
     
     for (let r = 0; r < this.rows; r++) {
@@ -1479,15 +1488,15 @@ class Game {
   
   evaluateWindow(window) {
     let score = 0;
-    const aiCount = window.filter(x => x === 2).length;
+    const computerCount = window.filter(x => x === 2).length;
     const humanCount = window.filter(x => x === 1).length;
     const emptyCount = window.filter(x => x === 0).length;
     
-    if (aiCount === 4) {
+    if (computerCount === 4) {
       score += 100000;
-    } else if (aiCount === 3 && emptyCount === 1) {
+    } else if (computerCount === 3 && emptyCount === 1) {
       score += 120;
-    } else if (aiCount === 2 && emptyCount === 2) {
+    } else if (computerCount === 2 && emptyCount === 2) {
       score += 10;
     }
     
@@ -1583,6 +1592,21 @@ class Game {
   }
 
   // ================= MOVE TRACKER AND COACH =================
+
+  resetMoveTracker() {
+    this.moveCount = 1;
+    if (this.trackerList) {
+      this.trackerList.innerHTML = '';
+    }
+  }
+
+  rebuildMoveTracker() {
+    const moves = [...this.moveHistory];
+    this.resetMoveTracker();
+    moves.forEach(({ col, player }) => {
+      this.updateMoveTracker(String.fromCharCode(65 + col), player);
+    });
+  }
   
   updateMoveTracker(colLetter, player) {
     if (!this.trackerList) return;
@@ -1610,7 +1634,7 @@ class Game {
       this.trackerList.appendChild(entry);
       this.trackerList.scrollTop = this.trackerList.scrollHeight;
     } else {
-      const entry = document.getElementById(`move-${this.moveCount}`);
+      const entry = this.trackerList.querySelector(`#move-${this.moveCount}`);
       if (entry) {
         const p2Span = entry.querySelector('.move-p2');
         if (p2Span) p2Span.textContent = colLetter;
@@ -1650,7 +1674,7 @@ class Game {
     }
     
     // 3. What does Minimax think are the best moves?
-    const depth = 5; // Match AI depth to guarantee consistency
+    const depth = 5; // Match the computer opponent depth for consistency.
     let bestScore = player === 2 ? -Infinity : Infinity;
     let bestMoves = [];
     

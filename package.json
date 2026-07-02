@@ -1,0 +1,5 @@
+{
+  "scripts": {
+    "test": "node --test tests/game-regressions.test.mjs"
+  }
+}
