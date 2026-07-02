@@ -9,6 +9,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
+  <!-- PeerJS Client Library for serverless WebRTC Peer-to-Peer online multiplayer -->
+  <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.2/dist/peerjs.min.js"></script>
 </head>
 <body class="dark-theme">
   <!-- Glowing background shapes -->
@@ -213,6 +215,36 @@
             <button id="mode-pvp" class="mode-btn active" data-mode="pvp">👥 Pass & Play</button>
             <button id="mode-pve" class="mode-btn" data-mode="pve">🤖 Vs Quantum AI</button>
             <button id="mode-lan" class="mode-btn" data-mode="lan">🌐 LAN Multiplayer</button>
+            <button id="mode-online" class="mode-btn" data-mode="online">⚡ Online P2P (WebRTC)</button>
+          </div>
+        </div>
+
+        <!-- Online WebRTC Configuration -->
+        <div id="online-config-group" class="setting-item hidden">
+          <label>Online WebRTC Match Settings</label>
+          
+          <div class="peer-status-box">
+            <span>Room Status:</span>
+            <span id="peer-status" class="status-badge disconnected">Idle</span>
+          </div>
+          
+          <div class="share-link-box" id="online-host-box">
+            <span>Copy & Share Link:</span>
+            <div class="copy-url-wrapper">
+              <input type="text" id="online-share-url" value="" readonly>
+              <button id="copy-online-url-btn" class="copy-btn">📋</button>
+            </div>
+            <div class="qr-image-wrapper">
+              <img id="online-qr-code" src="" alt="Online QR Code" style="display: none; width: 120px; height: 120px;">
+            </div>
+          </div>
+          
+          <div class="join-input-box" id="online-join-box">
+            <span>Or Enter Friend's Peer ID:</span>
+            <div class="copy-url-wrapper">
+              <input type="text" id="input-peer-id" placeholder="Paste Peer Room ID">
+              <button id="connect-peer-btn" class="copy-btn" style="width: auto; padding: 0 14px; font-weight: bold;">Connect</button>
+            </div>
           </div>
         </div>
 
@@ -255,7 +287,7 @@
         </div>
 
         <!-- Player Name Inputs -->
-        <div class="setting-item">
+        <div class="setting-item" id="player-rename-group">
           <label>Rename Players</label>
           <div class="name-inputs-box">
             <div class="name-input-group">
