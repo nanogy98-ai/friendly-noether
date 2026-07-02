@@ -1482,14 +1482,55 @@ class Game {
     }
     
     if (humanCount === 3 && emptyCount === 1) {
-      score -= 600;
+      score -= 120;
     } else if (humanCount === 2 && emptyCount === 2) {
-      score -= 15;
+      score -= 10;
     } else if (humanCount === 4) {
-      score -= 80000;
+      score -= 100000;
     }
     
     return score;
+  }
+  
+  getBoardStats(board, player) {
+    const opponent = player === 1 ? 2 : 1;
+    let my3 = 0, my2 = 0, opp3 = 0;
+    
+    const checkWindow = (window) => {
+      const myCount = window.filter(x => x === player).length;
+      const oppCount = window.filter(x => x === opponent).length;
+      const emptyCount = window.filter(x => x === 0).length;
+      
+      if (myCount === 3 && emptyCount === 1) my3++;
+      if (myCount === 2 && emptyCount === 2) my2++;
+      if (oppCount === 3 && emptyCount === 1) opp3++;
+    };
+    
+    for (let r = 0; r < this.rows; r++) {
+      for (let c = 0; c <= this.cols - 4; c++) {
+        checkWindow([board[r][c], board[r][c+1], board[r][c+2], board[r][c+3]]);
+      }
+    }
+    
+    for (let c = 0; c < this.cols; c++) {
+      for (let r = 0; r <= this.rows - 4; r++) {
+        checkWindow([board[r][c], board[r+1][c], board[r+2][c], board[r+3][c]]);
+      }
+    }
+    
+    for (let r = 0; r <= this.rows - 4; r++) {
+      for (let c = 0; c <= this.cols - 4; c++) {
+        checkWindow([board[r][c], board[r+1][c+1], board[r+2][c+2], board[r+3][c+3]]);
+      }
+    }
+    
+    for (let r = 3; r < this.rows; r++) {
+      for (let c = 0; c <= this.cols - 4; c++) {
+        checkWindow([board[r][c], board[r-1][c+1], board[r-2][c+2], board[r-3][c+3]]);
+      }
+    }
+    
+    return { my3, my2, opp3 };
   }
   
   countInCol(board, col, player) {
@@ -1669,10 +1710,23 @@ class Game {
         // It's an inaccuracy.
         const bestCol = bestMoves[0];
         icon = "❓";
-        if (Math.abs(bestCol - 3) < Math.abs(chosenCol - 3)) {
+        
+        const preStats = this.getBoardStats(boardState, player);
+        const bestRow = this.getNextOpenRow(boardState, bestCol);
+        boardState[bestRow][bestCol] = player;
+        const postStats = this.getBoardStats(boardState, player);
+        boardState[bestRow][bestCol] = 0;
+        
+        if (postStats.opp3 < preStats.opp3) {
+          msg = `Inaccuracy. Column ${String.fromCharCode(65 + bestCol)} was better because it blocks your opponent from setting up a 3-in-a-row threat.`;
+        } else if (postStats.my3 > preStats.my3) {
+          msg = `Inaccuracy. Column ${String.fromCharCode(65 + bestCol)} was better because it creates a dangerous 3-in-a-row threat.`;
+        } else if (postStats.my2 > preStats.my2) {
+          msg = `Inaccuracy. Column ${String.fromCharCode(65 + bestCol)} was better because it connects your pieces together to build future threats.`;
+        } else if (Math.abs(bestCol - 3) < Math.abs(chosenCol - 3)) {
           msg = `Inaccuracy. Column ${String.fromCharCode(65 + bestCol)} was better because it controls the center of the board more effectively.`;
         } else {
-          msg = `Inaccuracy. Column ${String.fromCharCode(65 + bestCol)} builds a mathematically stronger position for future attacks.`;
+          msg = `Inaccuracy. Column ${String.fromCharCode(65 + bestCol)} gives you more options for connecting pieces on future turns.`;
         }
       }
     }
