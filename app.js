@@ -621,7 +621,7 @@ class Game {
     }
   }
   
-  switchMode(mode) {
+  switchMode(mode, targetId = null) {
     if (this.gameMode === mode && mode !== 'online') return;
     this.sounds.playClick();
     
@@ -663,7 +663,7 @@ class Game {
       this.modeOnline.classList.add('active');
       this.onlineConfigGroup.classList.remove('hidden');
       this.p2NameInputGroup.classList.add('hidden'); // Opponent name will sync automatically
-      this.initPeerJS();
+      this.initPeerJS(targetId);
     }
     
     this.updateAllTimeScoreUI();
@@ -1260,35 +1260,49 @@ class Game {
   
   // ================= WEBRTC ONLINE MULTIPLAYER SERVICES =================
   
-  initPeerJS() {
+  initPeerJS(targetId = null) {
     this.destroyPeerJS();
     
     this.peerStatus.textContent = "Connecting...";
     this.peerStatus.className = "status-badge waiting";
+    
+    if (targetId) {
+      this.isOnlineHost = false;
+      this.p1NameText.textContent = 'Host (Red)';
+      this.p2NameText.textContent = this.inputP1Name.value.trim() || 'Guest (Yellow)';
+    } else {
+      this.isOnlineHost = true;
+      this.p1NameText.textContent = this.inputP1Name.value.trim() || 'Host (Red)';
+      this.p2NameText.textContent = 'Waiting...';
+    }
+    this.updateAllTimeScoreUI();
     
     // Connect to PeerJS cloud
     this.peer = new Peer();
     
     this.peer.on('open', (id) => {
       this.peerId = id;
-      this.isOnlineHost = true;
       
-      this.peerStatus.textContent = "Waiting for Friend...";
-      this.peerStatus.className = "status-badge waiting";
-      
-      // Build P2P connection URL
-      const origin = window.location.origin;
-      const path = window.location.pathname;
-      const shareLink = `${origin}${path}?join=${id}`;
-      
-      this.onlineShareUrl.value = shareLink;
-      this.onlineQrCode.src = `https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(shareLink)}`;
-      this.onlineQrCode.style.display = "block";
-      
-      // Host is Red P1
-      this.p1NameText.textContent = this.inputP1Name.value.trim() || 'Host (Red)';
-      this.p2NameText.textContent = 'Waiting...';
-      this.updateAllTimeScoreUI();
+      if (this.isOnlineHost) {
+        this.peerStatus.textContent = "Waiting for Friend...";
+        this.peerStatus.className = "status-badge waiting";
+        
+        // Build P2P connection URL
+        const origin = window.location.origin;
+        const path = window.location.pathname;
+        const shareLink = `${origin}${path}?join=${id}`;
+        
+        this.onlineShareUrl.value = shareLink;
+        this.onlineQrCode.src = `https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(shareLink)}`;
+        this.onlineQrCode.style.display = "block";
+      } else {
+        // We are the joiner, connect to target host now that our peer is open
+        this.peerStatus.textContent = "Connecting to Host...";
+        this.peerStatus.className = "status-badge waiting";
+        
+        this.peerConn = this.peer.connect(targetId);
+        this.setupPeerConnListeners(this.peerConn);
+      }
     });
     
     this.peer.on('connection', (conn) => {
@@ -1316,14 +1330,8 @@ class Game {
   }
   
   connectToPeer(targetId) {
-    if (!this.peer || !targetId) return;
-    
-    this.peerStatus.textContent = "Connecting...";
-    this.peerStatus.className = "status-badge waiting";
-    this.isOnlineHost = false; // Joiner is P2 Yellow
-    
-    this.peerConn = this.peer.connect(targetId);
-    this.setupPeerConnListeners(this.peerConn);
+    if (!targetId) return;
+    this.initPeerJS(targetId);
   }
   
   setupPeerConnListeners(conn) {
