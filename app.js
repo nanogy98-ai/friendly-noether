@@ -226,7 +226,7 @@ class Game {
     // Core game state
     this.board = Array(this.rows).fill(null).map(() => Array(this.cols).fill(0));
     this.activePlayer = 1; // 1 = Red, 2 = Yellow
-    this.gameMode = 'pvp'; // 'pvp', 'pve', 'lan', or 'online'
+    this.gameMode = 'pvp'; // 'pvp', 'pve', or 'online'
     this.difficulty = 'medium'; // 'easy', 'medium', 'hard'
     this.moveHistory = [];
     this.gameOver = false;
@@ -580,22 +580,19 @@ class Game {
     if (this.gameMode === mode && mode !== 'online') return;
     this.sounds.playClick();
     
-    // Clean up active LAN/WebRTC connections
-    this.stopLANPolling();
+    // Clean up active WebRTC connections
     this.destroyPeerJS();
     
     this.gameMode = mode;
     
     // Reset UI indicators
     this.difficultyGroup.classList.add('hidden');
-    this.lanConfigGroup.classList.add('hidden');
     this.onlineConfigGroup.classList.add('hidden');
     this.p2NameInputGroup.classList.remove('hidden');
     this.playerRenameGroup.classList.remove('hidden');
     
     this.modePvP.classList.remove('active');
     this.modePvE.classList.remove('active');
-    this.modeLAN.classList.remove('active');
     this.modeOnline.classList.remove('active');
     
     if (mode === 'pvp') {
@@ -847,7 +844,7 @@ class Game {
   }
   
   undoMove() {
-    if (this.gameMode === 'lan' || this.gameMode === 'online' || this.moveHistory.length === 0 || this.animating) return;
+    if (this.gameMode === 'online' || this.moveHistory.length === 0 || this.animating) return;
     
     this.winOverlay.classList.add('hidden');
     this.confetti.stop();
