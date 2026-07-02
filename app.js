@@ -227,6 +227,7 @@ class Game {
     this.board = Array(this.rows).fill(null).map(() => Array(this.cols).fill(0));
     this.activePlayer = 1; // 1 = Red, 2 = Yellow
     this.gameMode = 'pvp'; // 'pvp', 'pve', or 'online'
+    this.coachEnabled = true;
     this.difficulty = 'medium'; // 'easy', 'medium', 'hard'
     this.moveHistory = [];
     this.gameOver = false;
@@ -308,6 +309,8 @@ class Game {
     this.hintBtn = document.getElementById('hint-btn');
     this.soundBtn = document.getElementById('sound-btn');
     this.timerDisplay = document.getElementById('game-timer');
+    this.coachToggle = document.getElementById('coach-toggle');
+    this.clearStats = document.getElementById('clear-stats');
     
     // Settings Drawer
     this.settingsToggle = document.getElementById('settings-toggle');
@@ -522,6 +525,13 @@ class Game {
       this.sounds.playClick();
     });
     
+    this.coachToggle.addEventListener('change', (e) => {
+      this.coachEnabled = e.target.checked;
+      if (!this.coachEnabled && this.coachPanel) {
+        this.coachPanel.classList.add('hidden');
+      }
+    });
+    
     // Clear Scorecard Stats
     this.clearStats.addEventListener('click', () => {
       this.sounds.playClick();
@@ -688,7 +698,7 @@ class Game {
     const player = this.activePlayer;
     setTimeout(() => {
       this.evaluateMoveForCoach(boardClone, player, col);
-    }, 10);
+    }, 500);
     
     if (this.gameMode === 'online') {
       if (this.peerConn) {
@@ -1610,7 +1620,7 @@ class Game {
   }
 
   evaluateMoveForCoach(boardState, player, chosenCol) {
-    if (!this.coachPanel) return;
+    if (!this.coachPanel || !this.coachEnabled) return;
     
     this.coachPanel.classList.remove('hidden');
     this.coachMessage.textContent = "Analyzing...";
@@ -1640,7 +1650,7 @@ class Game {
     }
     
     // 3. What does Minimax think are the best moves?
-    const depth = 4;
+    const depth = 5; // Match AI depth to guarantee consistency
     let bestScore = player === 2 ? -Infinity : Infinity;
     let bestMoves = [];
     

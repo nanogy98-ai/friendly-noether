@@ -1,0 +1,115 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - banner [ref=e3]:
+      - heading "CONNECT 4" [level=1] [ref=e5]
+    - main [ref=e6]:
+      - complementary [ref=e7]:
+        - generic [ref=e8]:
+          - generic [ref=e10]: R
+          - heading "Red Player" [level=2] [ref=e11] [cursor=pointer]:
+            - generic [ref=e12]: Red Player
+          - generic [ref=e15]:
+            - generic [ref=e16]: SCORE
+            - generic [ref=e17]: "0"
+          - generic [ref=e19]: CONNECT 4
+        - generic:
+          - generic:
+            - generic: 🧠
+            - generic: AI Coach
+          - paragraph: Waiting for your move...
+      - generic [ref=e25]:
+        - generic [ref=e29]: Your Turn
+        - generic [ref=e30]:
+          - generic:
+            - generic: ▼
+            - generic: ▼
+            - generic: ▼
+            - generic: ▼
+            - generic: ▼
+            - generic: ▼
+            - generic: ▼
+        - generic [ref=e42]:
+          - button "New Game" [ref=e43] [cursor=pointer]:
+            - img [ref=e44]
+            - generic [ref=e46]: New Game
+          - button "Undo" [disabled] [ref=e47]:
+            - img [ref=e48]
+            - generic [ref=e51]: Undo
+          - generic [ref=e52]:
+            - img [ref=e53]
+            - generic [ref=e56]: 00:00
+          - button "Hint" [ref=e57] [cursor=pointer]:
+            - img [ref=e58]
+            - generic [ref=e60]: Hint
+          - button "Settings" [ref=e61] [cursor=pointer]:
+            - img [ref=e62]
+            - generic [ref=e65]: Settings
+      - complementary [ref=e66]:
+        - generic [ref=e67]:
+          - generic [ref=e69]: "Y"
+          - heading "Yellow Player" [level=2] [ref=e70] [cursor=pointer]:
+            - generic [ref=e71]: Yellow Player
+          - generic [ref=e74]:
+            - generic [ref=e75]: SCORE
+            - generic [ref=e76]: "0"
+          - generic [ref=e78]: CONNECT 4
+        - generic [ref=e85]: Move History
+  - generic:
+    - generic:
+      - generic:
+        - heading "Game Settings" [level=2]
+        - button "×"
+      - generic:
+        - generic:
+          - generic: Game Mode
+          - generic:
+            - button "👥 Pass & Play"
+            - button "🤖 Vs Quantum AI"
+            - button "⚡ Play with a Friend"
+        - generic:
+          - generic: Online WebRTC Match Settings
+          - generic:
+            - generic: "Room Status:"
+            - generic: Idle
+          - generic:
+            - text: "Copy & Share Link:"
+            - generic:
+              - textbox
+              - button "📋"
+          - generic:
+            - text: "Or Enter Friend's Peer ID:"
+            - generic:
+              - textbox "Paste Peer Room ID"
+              - button "Connect"
+        - generic:
+          - generic: AI Difficulty
+          - generic:
+            - button "Easy"
+            - button "Medium"
+            - button "Hard"
+        - generic:
+          - generic: AI Coach
+          - generic:
+            - checkbox [checked]
+            - generic: Enable Real-time Coach
+        - generic:
+          - generic: Rename Players
+          - generic:
+            - generic:
+              - textbox "Red Player Name": Red Player
+            - generic:
+              - textbox "Yellow Player Name": Yellow Player
+        - generic:
+          - generic: Statistics
+          - generic:
+            - paragraph:
+              - text: "Session Draws:"
+              - strong: "0"
+          - generic:
+            - button "Reset Scores"
+            - button "Reset All-Time Database"
+  - generic:
+    - generic:
+      - generic: 🏆
+      - heading "Player 1 Wins!" [level=2]
+      - paragraph: A brilliant victory in 18 moves.
