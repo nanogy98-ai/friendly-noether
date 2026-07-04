@@ -244,6 +244,9 @@ class Game {
     // Timer
     this.timerSeconds = 0;
     this.timerInterval = null;
+    this.timeControl = 0; // seconds
+    this.p1TimeRemaining = 0;
+    this.p2TimeRemaining = 0;
     
     // Scores
     this.scores = {
@@ -326,6 +329,9 @@ class Game {
     
     this.difficultyGroup = document.getElementById('difficulty-group');
     this.onlineConfigGroup = document.getElementById('online-config-group');
+    
+    this.p1TimerUI = document.getElementById('p1-timer');
+    this.p2TimerUI = document.getElementById('p2-timer');
     
     // Peer components
     this.peerStatus = document.getElementById('peer-status');
@@ -453,6 +459,17 @@ class Game {
         document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active'));
         e.target.classList.add('active');
         this.difficulty = e.target.dataset.diff;
+        this.restartGame();
+      });
+    });
+    
+    // Time control selectors
+    document.querySelectorAll('.time-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        this.sounds.playClick();
+        document.querySelectorAll('.time-btn').forEach(b => b.classList.remove('active'));
+        e.target.classList.add('active');
+        this.timeControl = parseInt(e.target.dataset.time, 10);
         this.restartGame();
       });
     });
@@ -923,6 +940,10 @@ class Game {
     this.confetti.stop();
     this.undoBtn.disabled = true;
 
+    this.p1TimeRemaining = this.timeControl;
+    this.p2TimeRemaining = this.timeControl;
+    this.updatePlayerTimersUI();
+
     this.updateTurnUI();
     this.startTimer();
 
@@ -1167,6 +1188,13 @@ class Game {
           
         case 'timer_sync':
           this.timerSeconds = data.seconds;
+          if (data.p1Time !== undefined) {
+            this.p1TimeRemaining = data.p1Time;
+            this.p2TimeRemaining = data.p2Time;
+            this.updatePlayerTimersUI();
+            if (this.p1TimeRemaining <= 0) this.handleTimeout(1);
+            if (this.p2TimeRemaining <= 0) this.handleTimeout(2);
+          }
           this.updateTimerDisplay();
           break;
       }
@@ -1206,10 +1234,16 @@ class Game {
       this.timerSeconds++;
       this.updateTimerDisplay();
       
+      this.tickPlayerClocks();
 
       // WebRTC Host clock broadcast
       if (this.gameMode === 'online' && this.isOnlineHost && this.peerConn && !this.gameOver) {
-        this.peerConn.send({ type: 'timer_sync', seconds: this.timerSeconds });
+        this.peerConn.send({ 
+          type: 'timer_sync', 
+          seconds: this.timerSeconds,
+          p1Time: this.p1TimeRemaining,
+          p2Time: this.p2TimeRemaining
+        });
       }
     }, 1000);
   }
@@ -1226,8 +1260,86 @@ class Game {
       this.timerInterval = setInterval(() => {
         this.timerSeconds++;
         this.updateTimerDisplay();
+        this.tickPlayerClocks();
       }, 1000);
     }
+  }
+  
+  tickPlayerClocks() {
+    if (this.timeControl > 0 && !this.gameOver) {
+      if (this.activePlayer === 1) {
+        this.p1TimeRemaining--;
+        if (this.p1TimeRemaining <= 0) {
+          this.p1TimeRemaining = 0;
+          this.handleTimeout(1);
+        }
+      } else {
+        this.p2TimeRemaining--;
+        if (this.p2TimeRemaining <= 0) {
+          this.p2TimeRemaining = 0;
+          this.handleTimeout(2);
+        }
+      }
+      this.updatePlayerTimersUI();
+    }
+  }
+
+  updatePlayerTimersUI() {
+    if (this.timeControl === 0) {
+      this.p1TimerUI.classList.add('hidden');
+      this.p2TimerUI.classList.add('hidden');
+      return;
+    }
+    
+    this.p1TimerUI.classList.remove('hidden');
+    this.p2TimerUI.classList.remove('hidden');
+    
+    const formatTime = (seconds) => {
+      const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+      const s = (seconds % 60).toString().padStart(2, '0');
+      return `${m}:${s}`;
+    };
+    
+    this.p1TimerUI.textContent = formatTime(this.p1TimeRemaining);
+    this.p2TimerUI.textContent = formatTime(this.p2TimeRemaining);
+    
+    this.p1TimerUI.classList.toggle('danger', this.p1TimeRemaining <= 10 && this.p1TimeRemaining > 0);
+    this.p2TimerUI.classList.toggle('danger', this.p2TimeRemaining <= 10 && this.p2TimeRemaining > 0);
+  }
+  
+  handleTimeout(losingPlayer) {
+    if (this.gameOver) return;
+    this.gameOver = true;
+    this.pauseTimer();
+    
+    const p1Name = this.p1NameText.textContent;
+    const p2Name = this.p2NameText.textContent;
+    const winner = losingPlayer === 1 ? 2 : 1;
+    const winnerName = winner === 1 ? p1Name : p2Name;
+    
+    this.sounds.playWin();
+    
+    this.scores[this.gameMode][winner === 1 ? 'p1' : 'p2']++;
+    this.allTimeScores[winnerName] = (this.allTimeScores[winnerName] || 0) + 1;
+    
+    this.saveStats();
+    this.saveAllTimeScores();
+    this.renderScores();
+    this.updateAllTimeScoreUI();
+    
+    this.turnText.textContent = `${winnerName} Wins!`;
+    this.turnColorIndicator.className = `turn-color-indicator ${winner === 1 ? 'red' : 'yellow'}`;
+    
+    this.winTitle.textContent = "Time's Up!";
+    this.winSubtitle.textContent = `${winnerName} wins on time!`;
+    this.winEmoji.textContent = '⏱️';
+    
+    setTimeout(() => {
+      this.winOverlay.classList.remove('hidden');
+      setTimeout(() => {
+        this.winOverlay.classList.add('hidden');
+      }, 3500);
+    }, 500);
   }
   
   updateTimerDisplay() {

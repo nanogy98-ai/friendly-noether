@@ -314,6 +314,37 @@ body {
   color: #fff;
 }
 
+.player-timer {
+  font-family: monospace;
+  font-size: 28px;
+  font-weight: 600;
+  color: #ffffff;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 8px 16px;
+  border-radius: 8px;
+  margin-top: -10px;
+  margin-bottom: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.5);
+  transition: all 0.2s ease;
+  letter-spacing: 2px;
+}
+
+.player-timer.hidden {
+  display: none;
+}
+
+.player-timer.danger {
+  color: #ff4444;
+  border-color: #ff4444;
+  animation: pulse-danger 1s infinite alternate;
+}
+
+@keyframes pulse-danger {
+  from { box-shadow: 0 0 5px rgba(255, 68, 68, 0.2), inset 0 2px 10px rgba(0, 0, 0, 0.5); }
+  to { box-shadow: 0 0 15px rgba(255, 68, 68, 0.8), inset 0 2px 10px rgba(0, 0, 0, 0.5); }
+}
+
 .win-dots-container {
   display: flex;
   flex-direction: column;
@@ -830,7 +861,7 @@ body {
   gap: 4px;
 }
 
-.mode-btn, .diff-btn {
+.mode-btn, .diff-btn, .time-btn {
   flex: 1;
   padding: 10px;
   border: none;
@@ -844,11 +875,11 @@ body {
   transition: all var(--tr-fast);
 }
 
-.mode-btn:hover, .diff-btn:hover {
+.mode-btn:hover, .diff-btn:hover, .time-btn:hover {
   color: var(--text-primary);
 }
 
-.mode-btn.active, .diff-btn.active {
+.mode-btn.active, .diff-btn.active, .time-btn.active {
   background: linear-gradient(135deg, #0088ff 0%, #0050e6 100%);
   color: #ffffff;
   box-shadow: 0 4px 10px rgba(0, 80, 230, 0.35);
@@ -1097,7 +1128,7 @@ body {
   gap: 4px;
 }
 
-.mode-selectors-vertical .mode-btn {
+.mode-selectors-vertical .mode-btn, .mode-selectors-vertical .time-btn {
   text-align: left;
   justify-content: flex-start;
   padding: 12px 16px;

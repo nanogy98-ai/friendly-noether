@@ -60,6 +60,7 @@
               <span class="dot empty"></span>
             </div>
           </div>
+          <div class="player-timer hidden" id="p1-timer">--:--</div>
 
           <!-- Move Coach Panel -->
           <div id="coach-panel" class="coach-panel hidden">
@@ -178,6 +179,7 @@
               <span class="dot empty"></span>
             </div>
           </div>
+          <div class="player-timer hidden" id="p2-timer">--:--</div>
 
           <!-- Move Tracker -->
           <div id="move-tracker" class="move-tracker">
@@ -209,6 +211,17 @@
             <button id="mode-pvp" class="mode-btn active" data-mode="pvp">Pass & Play</button>
             <button id="mode-pve" class="mode-btn" data-mode="pve">Vs Computer</button>
             <button id="mode-online" class="mode-btn" data-mode="online">Play with a Friend</button>
+          </div>
+        </div>
+
+        <!-- Time Control Selection -->
+        <div class="setting-item" id="time-control-group">
+          <label>Time Control (Per Player)</label>
+          <div class="mode-selectors-vertical">
+            <button class="time-btn active" data-time="0">No Time limit</button>
+            <button class="time-btn" data-time="60">60 Seconds</button>
+            <button class="time-btn" data-time="180">3 Minutes</button>
+            <button class="time-btn" data-time="300">5 Minutes</button>
           </div>
         </div>
 
