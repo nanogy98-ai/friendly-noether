@@ -733,6 +733,9 @@ class Game {
   }
   
   makeMove(row, col) {
+    if (this.moveHistory.length === 0) {
+      this.startTimer();
+    }
     this.board[row][col] = this.activePlayer;
     this.moveHistory.push({ row, col, player: this.activePlayer });
     
@@ -945,7 +948,9 @@ class Game {
     this.updatePlayerTimersUI();
 
     this.updateTurnUI();
-    this.startTimer();
+    this.pauseTimer();
+    this.timerSeconds = 0;
+    this.updateTimerDisplay();
 
     if (this.gameMode === 'online') {
       if (shouldBroadcast && this.peerConn) {
@@ -1393,6 +1398,9 @@ class Game {
       p2_name_display: this.p2NameText.textContent,
       p2_name_input: this.inputP2Name.value,
       timerSeconds: this.timerSeconds,
+      timeControl: this.timeControl,
+      p1TimeRemaining: this.p1TimeRemaining,
+      p2TimeRemaining: this.p2TimeRemaining,
       gameOver: this.gameOver
     };
     localStorage.setItem('connect4_active_game', JSON.stringify(state));
@@ -1415,6 +1423,12 @@ class Game {
       this.difficulty = state.difficulty;
       this.scores = state.scores;
       this.timerSeconds = state.timerSeconds;
+      
+      this.timeControl = state.timeControl || 0;
+      this.p1TimeRemaining = state.p1TimeRemaining !== undefined ? state.p1TimeRemaining : this.timeControl;
+      this.p2TimeRemaining = state.p2TimeRemaining !== undefined ? state.p2TimeRemaining : this.timeControl;
+      this.updatePlayerTimersUI();
+      
       this.gameOver = state.gameOver;
       
       const p1InputName = state.p1_name_input || state.p1_name || 'Red Player';
@@ -1461,7 +1475,9 @@ class Game {
           this.highlightWinningTokens(winInfo.cells);
         }
       } else {
-        this.resumeTimer();
+        if (this.moveHistory.length > 0) {
+          this.resumeTimer();
+        }
       }
       
       this.undoBtn.disabled = this.moveHistory.length === 0;
