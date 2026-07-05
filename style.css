@@ -1670,148 +1670,6 @@ body {
   border: 1px solid rgba(156, 188, 226, 0.16);
 }
 
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-/* removed desktop rules */
-
 @media (min-width: 1101px) {
   .bottom-bar {
     width: min(1120px, calc(100vw - 160px));
@@ -1881,45 +1739,28 @@ body {
     border-radius: 22px;
   }
 
-/* removed tablet rules */
-/* removed tablet rules */
-/* removed tablet rules */
-/* removed tablet rules */
-/* removed tablet rules */
-/* removed tablet rules */
-/* removed tablet rules */
-/* removed tablet rules */
-/* removed tablet rules */
-/* removed tablet rules */
-/* removed tablet rules */
-/* removed tablet rules */
-/* removed tablet rules */
-/* removed tablet rules */
-/* removed tablet rules */
-/* removed tablet rules */
-/* removed tablet rules */
-/* removed tablet rules */
-/* removed tablet rules */
-/* removed tablet rules */
-/* removed tablet rules */
-/* removed tablet rules */
-/* removed tablet rules */
-/* removed tablet rules */
-/* removed tablet rules */
-/* removed tablet rules */
-/* removed tablet rules */
-/* removed tablet rules */
-/* removed tablet rules */
-/* removed tablet rules */
-/* removed tablet rules */
-/* removed tablet rules */
-/* removed tablet rules */
-/* removed tablet rules */
-/* removed tablet rules */
-/* removed tablet rules */
-/* removed tablet rules */
+  .red-player-card .avatar-container,
+  .yellow-player-card .avatar-container {
+    width: 72px;
+    height: 72px;
+    margin-bottom: 8px;
+  }
 
-  .bottom-bar {
+  .red-player-card .avatar-initial,
+  .yellow-player-card .avatar-initial {
+    font-size: 36px;
+  }
+
+  .red-player-card h2,
+  .yellow-player-card h2 {
+    font-size: 18px;
+  }
+
+  .red-player-card .score-num,
+  .yellow-player-card .score-num {
+    font-size: 44px;
+  }
+.bottom-bar {
     width: 100%;
     max-width: 920px;
     display: grid;
@@ -2009,21 +1850,21 @@ body {
     flex: 0 0 auto;
   }
 
-/* removed mobile rules */
-/* removed mobile rules */
-/* removed mobile rules */
-/* removed mobile rules */
-/* removed mobile rules */
-/* removed mobile rules */
-/* removed mobile rules */
-/* removed mobile rules */
-/* removed mobile rules */
-/* removed mobile rules */
-/* removed mobile rules */
-/* removed mobile rules */
-/* removed mobile rules */
-/* removed mobile rules */
-/* removed mobile rules */
+  .red-player-card .avatar-container,
+  .yellow-player-card .avatar-container {
+    width: 58px;
+    height: 58px;
+    margin: 0;
+  }
+
+  .avatar-initial {
+    font-size: 31px;
+  }
+
+  .red-player-card .avatar-initial,
+  .yellow-player-card .avatar-initial {
+    font-size: 31px;
+  }
 
   .side-card h2 {
     flex: 1 1 auto;
@@ -2036,10 +1877,10 @@ body {
     text-overflow: ellipsis;
   }
 
-/* removed mobile rules */
-/* removed mobile rules */
-/* removed mobile rules */
-/* removed mobile rules */
+  .red-player-card h2,
+  .yellow-player-card h2 {
+    font-size: 15px;
+  }
 
   .score-divider {
     width: 1px;
@@ -2058,10 +1899,10 @@ body {
     font-size: 40px;
   }
 
-/* removed mobile rules */
-/* removed mobile rules */
-/* removed mobile rules */
-/* removed mobile rules */
+  .red-player-card .score-num,
+  .yellow-player-card .score-num {
+    font-size: 40px;
+  }
 
   .win-dots-container {
     align-items: flex-end;
@@ -2095,20 +1936,19 @@ body {
     border-radius: 18px;
   }
 
-/* removed mobile rules */
-/* removed mobile rules */
-/* removed mobile rules */
-/* removed mobile rules */
-/* removed mobile rules */
-/* removed mobile rules */
-/* removed mobile rules */
-/* removed mobile rules */
-/* removed mobile rules */
-/* removed mobile rules */
-/* removed mobile rules */
-/* removed mobile rules */
-/* removed mobile rules */
-/* removed mobile rules */
+  .red-player-card,
+  .yellow-player-card {
+    flex-wrap: wrap;
+  }
+
+  .red-player-card .coach-panel {
+    position: static;
+    flex: 1 0 100%;
+    max-height: 150px;
+    height: auto;
+    margin-top: 4px;
+    width: 100%;
+  }
 
   .move-tracker {
     width: 100%;
