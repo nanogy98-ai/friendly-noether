@@ -1499,7 +1499,9 @@ class Game {
       return validMoves[Math.floor(Math.random() * validMoves.length)];
     }
     
-    const depth = (this.gameMode === 'pve' && player === 2 && this.difficulty === 'medium') ? 3 : 5;
+    let depth = 5;
+    if (this.difficulty === 'medium') depth = 3;
+    if (this.difficulty === 'expert') depth = 7;
     validMoves.sort((a, b) => Math.abs(a - 3) - Math.abs(b - 3));
     
     let bestScore = player === 2 ? -Infinity : Infinity;
@@ -1802,7 +1804,9 @@ class Game {
     }
     
     // 3. What does Minimax think are the best moves?
-    const depth = 5; // Match the computer opponent depth for consistency.
+    let depth = 5;
+    if (this.difficulty === 'medium') depth = 3;
+    if (this.difficulty === 'expert') depth = 7;
     let bestScore = player === 2 ? -Infinity : Infinity;
     let bestMoves = [];
     
