@@ -1767,11 +1767,14 @@ class Game {
     if (validMoves.length === 0) return null;
     
     if (this.gameMode === 'pve' && player === 2 && this.difficulty === 'easy') {
-      return validMoves[Math.floor(Math.random() * validMoves.length)];
+      if (Math.random() < 0.25) {
+        return validMoves[Math.floor(Math.random() * validMoves.length)];
+      }
     }
     
     let depth = 5;
-    if (this.difficulty === 'medium') depth = 3;
+    if (this.difficulty === 'easy') depth = 1;
+    if (this.difficulty === 'medium') depth = 2;
     if (this.difficulty === 'expert') depth = 7;
     validMoves.sort((a, b) => Math.abs(a - 3) - Math.abs(b - 3));
     
