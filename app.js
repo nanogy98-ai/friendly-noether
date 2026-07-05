@@ -285,6 +285,15 @@ class Game {
         this.connectToPeer(joinRoomId);
       }, 750);
     }
+    this.updateHintButtonState();
+  }
+  
+  updateHintButtonState() {
+    if (this.gameMode === 'pve') {
+      this.hintBtn.disabled = false;
+    } else {
+      this.hintBtn.disabled = true;
+    }
   }
   
   initDOM() {
@@ -618,6 +627,7 @@ class Game {
     this.destroyPeerJS();
     
     this.gameMode = mode;
+    this.updateHintButtonState();
     
     // Reset UI indicators
     this.difficultyGroup.classList.add('hidden');
