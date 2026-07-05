@@ -1670,147 +1670,147 @@ body {
   border: 1px solid rgba(156, 188, 226, 0.16);
 }
 
-.red-player-card .coach-panel {
-  position: absolute;
-  left: 20px;
-  right: 20px;
-  bottom: 24px;
-  width: auto;
-  max-height: 148px;
-  margin-top: 0;
-  padding: 14px 16px;
-  text-align: left;
-  border-radius: 14px;
-  background:
-    linear-gradient(160deg, rgba(18, 26, 40, 0.8), rgba(5, 9, 17, 0.86));
-  border-color: rgba(255, 92, 86, 0.2);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 14px 30px rgba(0, 0, 0, 0.24);
-  overflow-y: auto;
-}
-
-.red-player-card .coach-header {
-  font-size: 12px;
-  margin-bottom: 8px;
-  padding-bottom: 8px;
-  letter-spacing: 0.2em;
-}
-
-.red-player-card .coach-icon {
-  color: var(--p1-color);
-  text-shadow: 0 0 10px var(--p1-glow);
-}
-
-.red-player-card .coach-message {
-  font-size: 14px;
-  line-height: 1.38;
-  color: rgba(244, 248, 255, 0.92);
-}
-
-.yellow-player-card {
-  justify-content: flex-start;
-  padding-top: 34px;
-  padding-bottom: 188px;
-}
-
-.yellow-player-card .avatar-container {
-  width: 88px;
-  height: 88px;
-  margin-bottom: 10px;
-}
-
-.yellow-player-card .avatar-initial {
-  font-size: 42px;
-}
-
-.yellow-player-card h2 {
-  font-size: 20px;
-}
-
-.yellow-player-card .score-divider {
-  margin: 8px 0 14px;
-}
-
-.yellow-player-card .score-display {
-  gap: 6px;
-  margin-bottom: 16px;
-}
-
-.yellow-player-card .score-num {
-  font-size: 52px;
-}
-
-.yellow-player-card .move-tracker {
-  position: absolute;
-  left: 20px;
-  right: 20px;
-  bottom: 24px;
-  width: auto;
-  height: 148px;
-  min-height: 0;
-  padding: 14px 16px;
-  text-align: left;
-  border-radius: 14px;
-  background:
-    linear-gradient(160deg, rgba(18, 26, 40, 0.8), rgba(5, 9, 17, 0.86));
-  border-color: rgba(255, 198, 82, 0.2);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 14px 30px rgba(0, 0, 0, 0.24);
-}
-
-.yellow-player-card .tracker-header {
-  font-size: 12px;
-  margin-bottom: 8px;
-  padding-bottom: 8px;
-  letter-spacing: 0.2em;
-}
-
-.yellow-player-card .tracker-list {
-  gap: 5px;
-}
-
-.yellow-player-card .move-entry {
-  font-size: 13px;
-  grid-template-columns: 22px 1fr 1fr;
-  padding: 3px 0;
-}
-
-@media (min-width: 601px) {
-  .red-player-card:has(.coach-panel:not(.hidden)) {
-    justify-content: flex-start;
-    padding-top: 24px;
-    padding-bottom: 188px;
-  }
-
-  .red-player-card:has(.coach-panel:not(.hidden)) .avatar-container {
-    width: 88px;
-    height: 88px;
-    margin-bottom: 10px;
-  }
-
-  .red-player-card:has(.coach-panel:not(.hidden)) .avatar-initial {
-    font-size: 42px;
-  }
-
-  .red-player-card:has(.coach-panel:not(.hidden)) h2 {
-    font-size: 20px;
-  }
-
-  .red-player-card:has(.coach-panel:not(.hidden)) .score-divider {
-    margin: 8px 0 14px;
-  }
-
-  .red-player-card:has(.coach-panel:not(.hidden)) .score-display {
-    gap: 6px;
-    margin-bottom: 16px;
-  }
-
-  .red-player-card:has(.coach-panel:not(.hidden)) .score-num {
-    font-size: 52px;
-  }
-}
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
+/* removed desktop rules */
 
 @media (min-width: 1101px) {
   .bottom-bar {
@@ -1881,43 +1881,43 @@ body {
     border-radius: 22px;
   }
 
-  .red-player-card,
-  .yellow-player-card {
-    padding-top: 20px;
-    padding-bottom: 152px;
-  }
-
-  .red-player-card .avatar-container,
-  .yellow-player-card .avatar-container {
-    width: 72px;
-    height: 72px;
-    margin-bottom: 8px;
-  }
-
-  .red-player-card .avatar-initial,
-  .yellow-player-card .avatar-initial {
-    font-size: 36px;
-  }
-
-  .red-player-card h2,
-  .yellow-player-card h2 {
-    font-size: 18px;
-  }
-
-  .red-player-card .score-num,
-  .yellow-player-card .score-num {
-    font-size: 44px;
-  }
-
-  .red-player-card .coach-panel,
-  .yellow-player-card .move-tracker {
-    left: 18px;
-    right: 18px;
-    bottom: 18px;
-    height: 118px;
-    max-height: 118px;
-    padding: 12px 14px;
-  }
+/* removed tablet rules */
+/* removed tablet rules */
+/* removed tablet rules */
+/* removed tablet rules */
+/* removed tablet rules */
+/* removed tablet rules */
+/* removed tablet rules */
+/* removed tablet rules */
+/* removed tablet rules */
+/* removed tablet rules */
+/* removed tablet rules */
+/* removed tablet rules */
+/* removed tablet rules */
+/* removed tablet rules */
+/* removed tablet rules */
+/* removed tablet rules */
+/* removed tablet rules */
+/* removed tablet rules */
+/* removed tablet rules */
+/* removed tablet rules */
+/* removed tablet rules */
+/* removed tablet rules */
+/* removed tablet rules */
+/* removed tablet rules */
+/* removed tablet rules */
+/* removed tablet rules */
+/* removed tablet rules */
+/* removed tablet rules */
+/* removed tablet rules */
+/* removed tablet rules */
+/* removed tablet rules */
+/* removed tablet rules */
+/* removed tablet rules */
+/* removed tablet rules */
+/* removed tablet rules */
+/* removed tablet rules */
+/* removed tablet rules */
 
   .bottom-bar {
     width: 100%;
@@ -2009,21 +2009,21 @@ body {
     flex: 0 0 auto;
   }
 
-  .red-player-card .avatar-container,
-  .yellow-player-card .avatar-container {
-    width: 58px;
-    height: 58px;
-    margin: 0;
-  }
-
-  .avatar-initial {
-    font-size: 31px;
-  }
-
-  .red-player-card .avatar-initial,
-  .yellow-player-card .avatar-initial {
-    font-size: 31px;
-  }
+/* removed mobile rules */
+/* removed mobile rules */
+/* removed mobile rules */
+/* removed mobile rules */
+/* removed mobile rules */
+/* removed mobile rules */
+/* removed mobile rules */
+/* removed mobile rules */
+/* removed mobile rules */
+/* removed mobile rules */
+/* removed mobile rules */
+/* removed mobile rules */
+/* removed mobile rules */
+/* removed mobile rules */
+/* removed mobile rules */
 
   .side-card h2 {
     flex: 1 1 auto;
@@ -2036,10 +2036,10 @@ body {
     text-overflow: ellipsis;
   }
 
-  .red-player-card h2,
-  .yellow-player-card h2 {
-    font-size: 15px;
-  }
+/* removed mobile rules */
+/* removed mobile rules */
+/* removed mobile rules */
+/* removed mobile rules */
 
   .score-divider {
     width: 1px;
@@ -2058,10 +2058,10 @@ body {
     font-size: 40px;
   }
 
-  .red-player-card .score-num,
-  .yellow-player-card .score-num {
-    font-size: 40px;
-  }
+/* removed mobile rules */
+/* removed mobile rules */
+/* removed mobile rules */
+/* removed mobile rules */
 
   .win-dots-container {
     align-items: flex-end;
@@ -2095,20 +2095,20 @@ body {
     border-radius: 18px;
   }
 
-  .red-player-card,
-  .yellow-player-card {
-    flex-wrap: wrap;
-  }
-
-  .red-player-card .coach-panel,
-  .yellow-player-card .move-tracker {
-    position: static;
-    flex: 1 0 100%;
-    max-height: 150px;
-    height: auto;
-    margin-top: 4px;
-    width: 100%;
-  }
+/* removed mobile rules */
+/* removed mobile rules */
+/* removed mobile rules */
+/* removed mobile rules */
+/* removed mobile rules */
+/* removed mobile rules */
+/* removed mobile rules */
+/* removed mobile rules */
+/* removed mobile rules */
+/* removed mobile rules */
+/* removed mobile rules */
+/* removed mobile rules */
+/* removed mobile rules */
+/* removed mobile rules */
 
   .move-tracker {
     width: 100%;
