@@ -292,6 +292,18 @@ body {
   border-radius: 50%;
   position: absolute;
 }
+.match-format {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: #f39c12;
+  margin-top: -10px;
+  margin-bottom: 5px;
+}
+
+.match-format.hidden {
+  display: none;
+}
 
 .score-display {
   display: flex;
@@ -861,7 +873,7 @@ body {
   gap: 4px;
 }
 
-.mode-btn, .diff-btn, .time-btn {
+.mode-btn, .diff-btn, .time-btn, .match-btn {
   flex: 1;
   padding: 10px;
   border: none;
@@ -875,11 +887,11 @@ body {
   transition: all var(--tr-fast);
 }
 
-.mode-btn:hover, .diff-btn:hover, .time-btn:hover {
+.mode-btn:hover, .diff-btn:hover, .time-btn:hover, .match-btn:hover {
   color: var(--text-primary);
 }
 
-.mode-btn.active, .diff-btn.active, .time-btn.active {
+.mode-btn.active, .diff-btn.active, .time-btn.active, .match-btn.active {
   background: linear-gradient(135deg, #0088ff 0%, #0050e6 100%);
   color: #ffffff;
   box-shadow: 0 4px 10px rgba(0, 80, 230, 0.35);
@@ -1128,7 +1140,7 @@ body {
   gap: 4px;
 }
 
-.mode-selectors-vertical .mode-btn, .mode-selectors-vertical .time-btn {
+.mode-selectors-vertical .mode-btn, .mode-selectors-vertical .time-btn, .mode-selectors-vertical .match-btn {
   text-align: left;
   justify-content: flex-start;
   padding: 12px 16px;

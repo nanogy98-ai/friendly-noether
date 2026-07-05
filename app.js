@@ -248,6 +248,8 @@ class Game {
     this.p1TimeRemaining = 0;
     this.p2TimeRemaining = 0;
     
+    this.matchTargetWins = 0;
+    
     // Scores
     this.scores = {
       pvp: { p1: 0, p2: 0, draws: 0 },
@@ -332,6 +334,9 @@ class Game {
     
     this.p1TimerUI = document.getElementById('p1-timer');
     this.p2TimerUI = document.getElementById('p2-timer');
+    
+    this.p1MatchFormatUI = document.getElementById('p1-match-format');
+    this.p2MatchFormatUI = document.getElementById('p2-match-format');
     
     // Peer components
     this.peerStatus = document.getElementById('peer-status');
@@ -470,6 +475,20 @@ class Game {
         document.querySelectorAll('.time-btn').forEach(b => b.classList.remove('active'));
         e.target.classList.add('active');
         this.timeControl = parseInt(e.target.dataset.time, 10);
+        this.restartGame();
+      });
+    });
+    
+    // Match Length selectors
+    document.querySelectorAll('.match-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        this.sounds.playClick();
+        document.querySelectorAll('.match-btn').forEach(b => b.classList.remove('active'));
+        e.target.classList.add('active');
+        this.matchTargetWins = parseInt(e.target.dataset.wins, 10);
+        this.scores[this.gameMode] = { p1: 0, p2: 0, draws: 0 };
+        this.renderScores();
+        this.updateMatchFormatUI();
         this.restartGame();
       });
     });
@@ -804,9 +823,13 @@ class Game {
       this.turnColorIndicator.className = `turn-color-indicator ${winInfo.player === 1 ? 'red' : 'yellow'}`;
       
       const numMoves = this.moveHistory.length;
-      this.winTitle.textContent = `${winnerName} Wins!`;
-      this.winSubtitle.textContent = `Achieved a brilliant victory in ${numMoves} total moves.`;
-      this.winEmoji.textContent = winInfo.player === 1 ? 'R' : 'Y';
+      const isMatchWin = this.matchTargetWins > 0 && (modeStats.p1 >= this.matchTargetWins || modeStats.p2 >= this.matchTargetWins);
+      
+      this.winTitle.textContent = isMatchWin ? `SERIES VICTORY!` : `${winnerName} Wins!`;
+      this.winSubtitle.textContent = isMatchWin 
+        ? `${winnerName} wins the match ${modeStats.p1} - ${modeStats.p2}!` 
+        : `Achieved a brilliant victory in ${numMoves} total moves.`;
+      this.winEmoji.textContent = isMatchWin ? '🏆' : (winInfo.player === 1 ? 'R' : 'Y');
       
       setTimeout(() => {
         this.winOverlay.classList.remove('hidden');
@@ -929,6 +952,19 @@ class Game {
   
   restartGame(options = {}) {
     const shouldBroadcast = options.broadcast !== false;
+
+    if (this.matchTargetWins > 0) {
+      const p1Score = this.scores[this.gameMode].p1;
+      const p2Score = this.scores[this.gameMode].p2;
+      if (p1Score >= this.matchTargetWins || p2Score >= this.matchTargetWins) {
+        this.scores[this.gameMode] = { p1: 0, p2: 0, draws: 0 };
+        this.renderScores();
+        this.saveStats();
+      }
+      this.newGameBtn.innerHTML = "<span class=\"icon\">+</span> Next Game";
+    } else {
+      this.newGameBtn.innerHTML = "<span class=\"icon\">+</span> New Game";
+    }
 
     this.board = Array(this.rows).fill(null).map(() => Array(this.cols).fill(0));
     this.moveHistory = [];
@@ -1335,9 +1371,14 @@ class Game {
     this.turnText.textContent = `${winnerName} Wins!`;
     this.turnColorIndicator.className = `turn-color-indicator ${winner === 1 ? 'red' : 'yellow'}`;
     
-    this.winTitle.textContent = "Time's Up!";
-    this.winSubtitle.textContent = `${winnerName} wins on time!`;
-    this.winEmoji.textContent = '⏱️';
+    const modeStats = this.scores[this.gameMode];
+    const isMatchWin = this.matchTargetWins > 0 && (modeStats.p1 >= this.matchTargetWins || modeStats.p2 >= this.matchTargetWins);
+    
+    this.winTitle.textContent = isMatchWin ? `SERIES VICTORY!` : `Time's Up!`;
+    this.winSubtitle.textContent = isMatchWin 
+      ? `${winnerName} wins the match ${modeStats.p1} - ${modeStats.p2}!` 
+      : `${winnerName} wins on time!`;
+    this.winEmoji.textContent = isMatchWin ? '🏆' : '⏱️';
     
     setTimeout(() => {
       this.winOverlay.classList.remove('hidden');
@@ -1399,6 +1440,7 @@ class Game {
       p2_name_input: this.inputP2Name.value,
       timerSeconds: this.timerSeconds,
       timeControl: this.timeControl,
+      matchTargetWins: this.matchTargetWins,
       p1TimeRemaining: this.p1TimeRemaining,
       p2TimeRemaining: this.p2TimeRemaining,
       gameOver: this.gameOver
@@ -1425,6 +1467,9 @@ class Game {
       this.timerSeconds = state.timerSeconds;
       
       this.timeControl = state.timeControl || 0;
+      this.matchTargetWins = state.matchTargetWins || 0;
+      this.updateMatchFormatUI();
+      
       this.p1TimeRemaining = state.p1TimeRemaining !== undefined ? state.p1TimeRemaining : this.timeControl;
       this.p2TimeRemaining = state.p2TimeRemaining !== undefined ? state.p2TimeRemaining : this.timeControl;
       this.updatePlayerTimersUI();
@@ -1704,7 +1749,10 @@ class Game {
   }
   
   saveStats() {
-    localStorage.setItem('connect4_scores', JSON.stringify(this.scores));
+    localStorage.setItem('connect4_scores', JSON.stringify({
+      scores: this.scores,
+      matchTargetWins: this.matchTargetWins
+    }));
   }
   
   renderScores() {
@@ -1712,6 +1760,20 @@ class Game {
     this.p1Score.textContent = stats.p1;
     this.p2Score.textContent = stats.p2;
     this.drawsStat.textContent = stats.draws;
+  }
+  
+  updateMatchFormatUI() {
+    if (this.matchTargetWins > 0) {
+      this.p1MatchFormatUI.textContent = `FIRST TO ${this.matchTargetWins}`;
+      this.p2MatchFormatUI.textContent = `FIRST TO ${this.matchTargetWins}`;
+      this.p1MatchFormatUI.classList.remove('hidden');
+      this.p2MatchFormatUI.classList.remove('hidden');
+      this.newGameBtn.innerHTML = "<span class=\"icon\">+</span> Next Game";
+    } else {
+      this.p1MatchFormatUI.classList.add('hidden');
+      this.p2MatchFormatUI.classList.add('hidden');
+      this.newGameBtn.innerHTML = "<span class=\"icon\">+</span> New Game";
+    }
   }
   
   resetStats() {

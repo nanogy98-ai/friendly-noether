@@ -47,6 +47,7 @@
           <div class="score-divider">
             <span class="divider-dot"></span>
           </div>
+          <div class="match-format hidden" id="p1-match-format">FIRST TO 3</div>
           <div class="score-display">
             <span class="score-label">SCORE</span>
             <span class="score-num" id="p1-score">0</span>
@@ -166,6 +167,7 @@
           <div class="score-divider">
             <span class="divider-dot"></span>
           </div>
+          <div class="match-format hidden" id="p2-match-format">FIRST TO 3</div>
           <div class="score-display">
             <span class="score-label">SCORE</span>
             <span class="score-num" id="p2-score">0</span>
@@ -224,6 +226,16 @@
             <button class="time-btn" data-time="60">60 Seconds</button>
             <button class="time-btn" data-time="180">3 Minutes</button>
             <button class="time-btn" data-time="300">5 Minutes</button>
+          </div>
+        </div>
+
+        <!-- Match Length Selection -->
+        <div class="setting-item" id="match-length-group">
+          <label>Match Length</label>
+          <div class="mode-selectors-vertical">
+            <button class="match-btn active" data-wins="0">Single Game (Endless)</button>
+            <button class="match-btn" data-wins="3">First to 3</button>
+            <button class="match-btn" data-wins="5">First to 5</button>
           </div>
         </div>
 
