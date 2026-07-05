@@ -226,9 +226,10 @@ class Game {
     // Core game state
     this.board = Array(this.rows).fill(null).map(() => Array(this.cols).fill(0));
     this.activePlayer = 1; // 1 = Red, 2 = Yellow
-    this.gameMode = 'pvp'; // 'pvp', 'pve', or 'online'
+    this.gameMode = 'pvp'; // 'pvp', 'pve', 'online', 'puzzle'
     this.coachEnabled = false;
-    this.difficulty = 'medium'; // 'easy', 'medium', 'hard'
+    this.threatsEnabled = false;
+    this.difficulty = 'medium'; // 'easy', 'medium', 'hard', 'expert'
     this.moveHistory = [];
     this.gameOver = false;
     this.animating = false;
@@ -259,6 +260,38 @@ class Game {
     
     // All-time scores database
     this.allTimeScores = {};
+    
+    // Training Features
+    this.evaluationHistory = [];
+    this.currentPuzzleIndex = 0;
+    this.trainingPuzzles = [
+      {
+        name: "Block the 7-Trap",
+        description: "Yellow has set up a deadly 7-Trap. Find the only move that survives!",
+        playerTurn: 1,
+        board: [
+          [0,0,0,0,0,0,0],
+          [0,0,0,0,0,0,0],
+          [0,0,0,0,0,0,0],
+          [0,0,0,2,0,0,0],
+          [0,0,2,2,0,0,0],
+          [0,1,1,1,2,0,0]
+        ]
+      },
+      {
+        name: "The Double Threat",
+        description: "Red can force a win in 3 moves. Can you find the start of the sequence?",
+        playerTurn: 1,
+        board: [
+          [0,0,0,0,0,0,0],
+          [0,0,0,0,0,0,0],
+          [0,0,0,0,0,0,0],
+          [0,0,0,1,0,0,0],
+          [0,0,2,1,0,0,0],
+          [0,2,2,1,0,0,0]
+        ]
+      }
+    ];
     
     // Controllers
     this.sounds = new SoundController();
@@ -315,8 +348,14 @@ class Game {
     this.undoBtn = document.getElementById('undo-btn');
     this.hintBtn = document.getElementById('hint-btn');
     this.soundBtn = document.getElementById('sound-btn');
+    this.difficultyGroup = document.getElementById('difficulty-group');
     this.timerDisplay = document.getElementById('game-timer');
     this.coachToggle = document.getElementById('coach-toggle');
+    this.threatsToggle = document.getElementById('threats-toggle');
+    this.reviewGameBtn = document.getElementById('review-game-btn');
+    this.analysisModal = document.getElementById('analysis-modal');
+    this.analysisContent = document.getElementById('analysis-content');
+    this.closeAnalysisBtn = document.getElementById('close-analysis-btn');
     this.clearStats = document.getElementById('clear-stats');
     
     // Settings Drawer
@@ -328,6 +367,7 @@ class Game {
     this.modePvP = document.getElementById('mode-pvp');
     this.modePvE = document.getElementById('mode-pve');
     this.modeOnline = document.getElementById('mode-online');
+    this.modePuzzle = document.getElementById('mode-puzzle');
     
     this.difficultyGroup = document.getElementById('difficulty-group');
     this.onlineConfigGroup = document.getElementById('online-config-group');
@@ -442,6 +482,7 @@ class Game {
     this.modePvP.addEventListener('click', () => this.switchMode('pvp'));
     this.modePvE.addEventListener('click', () => this.switchMode('pve'));
     this.modeOnline.addEventListener('click', () => this.switchMode('online'));
+    this.modePuzzle.addEventListener('click', () => this.switchMode('puzzle'));
 
     // Connect to target Peer ID
     this.connectPeerBtn.addEventListener('click', () => {
@@ -552,7 +593,25 @@ class Game {
       this.coachEnabled = e.target.checked;
       if (!this.coachEnabled && this.coachPanel) {
         this.coachPanel.classList.add('hidden');
+      } else if (this.coachEnabled && !this.gameOver) {
+        this.evaluateMoveForCoach(this.board, this.activePlayer, null);
       }
+    });
+
+    this.threatsToggle.addEventListener('change', (e) => {
+      this.threatsEnabled = e.target.checked;
+      this.updateThreatIndicators();
+    });
+    
+    this.reviewGameBtn.addEventListener('click', () => {
+      this.sounds.playClick();
+      this.generateAnalysisReport();
+      this.analysisModal.classList.remove('hidden');
+    });
+    
+    this.closeAnalysisBtn.addEventListener('click', () => {
+      this.sounds.playClick();
+      this.analysisModal.classList.add('hidden');
     });
     
     // Clear Scorecard Stats
@@ -597,6 +656,11 @@ class Game {
   canLocalPlayerAct(showAlert = false) {
     if (this.gameOver || this.animating) return false;
     if (this.gameMode === 'pve' && this.activePlayer === 2) return false;
+    
+    if (this.gameMode === 'puzzle') {
+      const puzzle = this.trainingPuzzles[this.currentPuzzleIndex];
+      if (this.activePlayer !== puzzle.playerTurn) return false;
+    }
 
     if (this.gameMode === 'online') {
       if (!this.peerConn) return false;
@@ -628,6 +692,7 @@ class Game {
     this.modePvP.classList.remove('active');
     this.modePvE.classList.remove('active');
     this.modeOnline.classList.remove('active');
+    if (this.modePuzzle) this.modePuzzle.classList.remove('active');
     
     if (mode === 'pvp') {
       this.modePvP.classList.add('active');
@@ -644,6 +709,9 @@ class Game {
       this.onlineConfigGroup.classList.remove('hidden');
       this.p2NameInputGroup.classList.add('hidden'); // Opponent name will sync automatically
       this.initPeerJS(targetId);
+    } else if (mode === 'puzzle') {
+      if (this.modePuzzle) this.modePuzzle.classList.add('active');
+      this.playerRenameGroup.classList.add('hidden'); // Don't allow renaming in puzzle mode
     }
     
     this.updateAllTimeScoreUI();
@@ -825,11 +893,29 @@ class Game {
       const numMoves = this.moveHistory.length;
       const isMatchWin = this.matchTargetWins > 0 && (modeStats.p1 >= this.matchTargetWins || modeStats.p2 >= this.matchTargetWins);
       
-      this.winTitle.textContent = isMatchWin ? `SERIES VICTORY!` : `${winnerName} Wins!`;
-      this.winSubtitle.textContent = isMatchWin 
-        ? `${winnerName} wins the match ${modeStats.p1} - ${modeStats.p2}!` 
-        : `Achieved a brilliant victory in ${numMoves} total moves.`;
-      this.winEmoji.textContent = isMatchWin ? '🏆' : (winInfo.player === 1 ? 'R' : 'Y');
+      if (this.gameMode === 'puzzle') {
+        this.reviewGameBtn.style.display = 'none';
+        if (winInfo.player === this.trainingPuzzles[this.currentPuzzleIndex].playerTurn) {
+          this.winTitle.textContent = "Puzzle Solved!";
+          this.winSubtitle.textContent = "Great job finding the winning move.";
+          this.winEmoji.textContent = '🧩';
+          this.currentPuzzleIndex++;
+          if (this.currentPuzzleIndex >= this.trainingPuzzles.length) {
+            this.currentPuzzleIndex = 0;
+          }
+        } else {
+          this.winTitle.textContent = "Puzzle Failed!";
+          this.winSubtitle.textContent = "You missed the critical move. Try again!";
+          this.winEmoji.textContent = '❌';
+        }
+      } else {
+        this.reviewGameBtn.style.display = 'block';
+        this.winTitle.textContent = isMatchWin ? `SERIES VICTORY!` : `${winnerName} Wins!`;
+        this.winSubtitle.textContent = isMatchWin 
+          ? `${winnerName} wins the match ${modeStats.p1} - ${modeStats.p2}!` 
+          : `Achieved a brilliant victory in ${numMoves} total moves.`;
+        this.winEmoji.textContent = isMatchWin ? '🏆' : (winInfo.player === 1 ? 'R' : 'Y');
+      }
       
       setTimeout(() => {
         this.winOverlay.classList.remove('hidden');
@@ -852,6 +938,7 @@ class Game {
       this.winTitle.textContent = "Match Draw!";
       this.winSubtitle.textContent = "A perfect defensive grid from both sides.";
       this.winEmoji.textContent = '🤝';
+      this.reviewGameBtn.style.display = 'block';
       
       setTimeout(() => {
         this.winOverlay.classList.remove('hidden');
@@ -862,11 +949,16 @@ class Game {
       
     } else {
       this.activePlayer = this.activePlayer === 1 ? 2 : 1;
+      this.recordEvaluation();
       this.updateTurnUI();
       this.saveActiveGameState();
       
-      if (!this.gameOver && this.gameMode === 'pve' && this.activePlayer === 2) {
-        this.triggerComputerMove();
+      if (!this.gameOver) {
+        const isPvEComputerTurn = this.gameMode === 'pve' && this.activePlayer === 2;
+        const isPuzzleComputerTurn = this.gameMode === 'puzzle' && this.activePlayer !== this.trainingPuzzles[this.currentPuzzleIndex].playerTurn;
+        if (isPvEComputerTurn || isPuzzleComputerTurn) {
+          this.triggerComputerMove();
+        }
       }
     }
   }
@@ -876,7 +968,7 @@ class Game {
     this.turnText.textContent = "Computer is thinking...";
     
     setTimeout(() => {
-      const computerCol = this.getBestMoveForPlayer(2);
+      const computerCol = this.getBestMoveForPlayer(this.activePlayer);
       if (computerCol !== null) {
         const computerRow = this.getNextOpenRow(this.board, computerCol);
         this.animating = false;
@@ -913,12 +1005,14 @@ class Game {
       this.removeLastTokenDOM();
       this.board[lastMove.row][lastMove.col] = 0;
       this.moveHistory.pop();
+      this.evaluationHistory.pop();
       
       if (lastMove.player === 2 && this.moveHistory.length > 0) {
         const userMove = this.moveHistory[this.moveHistory.length - 1];
         this.removeLastTokenDOM();
         this.board[userMove.row][userMove.col] = 0;
         this.moveHistory.pop();
+        this.evaluationHistory.pop();
       }
       
       this.activePlayer = 1;
@@ -927,6 +1021,7 @@ class Game {
       this.removeLastTokenDOM();
       this.board[lastMove.row][lastMove.col] = 0;
       this.moveHistory.pop();
+      this.evaluationHistory.pop();
       this.activePlayer = lastMove.player;
     }
     
@@ -966,14 +1061,42 @@ class Game {
       this.newGameBtn.innerHTML = "<span class=\"icon\">+</span> New Game";
     }
 
-    this.board = Array(this.rows).fill(null).map(() => Array(this.cols).fill(0));
+    if (this.gameMode === 'puzzle') {
+      const puzzle = this.trainingPuzzles[this.currentPuzzleIndex];
+      this.board = JSON.parse(JSON.stringify(puzzle.board));
+      this.activePlayer = puzzle.playerTurn;
+      this.p1NameText.textContent = `Puzzle ${this.currentPuzzleIndex + 1}`;
+      this.p2NameText.textContent = `of ${this.trainingPuzzles.length}`;
+      this.scores['puzzle'] = { p1: " ", p2: " ", draws: 0 };
+      this.matchTargetWins = 0; // Disable match length for puzzles
+    } else {
+      this.board = Array(this.rows).fill(null).map(() => Array(this.cols).fill(0));
+      this.activePlayer = 1;
+    }
+    
     this.moveHistory = [];
+    this.evaluationHistory = [];
     this.gameOver = false;
     this.animating = false;
-    this.activePlayer = 1;
-
     this.tokensContainer.innerHTML = '';
     this.previewRow.innerHTML = '';
+    
+    // Render existing pieces (for puzzles)
+    for (let r = 0; r < this.rows; r++) {
+      for (let c = 0; c < this.cols; c++) {
+        if (this.board[r][c] !== 0) {
+          const player = this.board[r][c];
+          const token = document.createElement('div');
+          token.className = `token player${player}`;
+          token.dataset.row = r;
+          token.dataset.col = c;
+          token.style.left = `calc(${c} * (100% / var(--board-cols)) + (100% / var(--board-cols) - var(--token-size)) / 2)`;
+          token.style.transform = `translateY(calc(${r} * var(--cell-size) + (var(--cell-size) - var(--token-size)) / 2))`;
+          this.tokensContainer.appendChild(token);
+        }
+      }
+    }
+    
     this.resetMoveTracker();
     this.winOverlay.classList.add('hidden');
     this.confetti.stop();
@@ -1034,6 +1157,45 @@ class Game {
         this.clearPreviews();
       }
     }
+    
+    this.updateThreatIndicators();
+  }
+  
+  updateThreatIndicators() {
+    // Clear existing threats
+    document.querySelectorAll('.threat-indicator').forEach(el => el.remove());
+    if (!this.threatsEnabled || this.gameOver) return;
+
+    const validMoves = this.getValidMoves(this.board);
+    validMoves.forEach(col => {
+      const row = this.getNextOpenRow(this.board, col);
+      
+      let p1Wins = false;
+      let p2Wins = false;
+
+      // Check P1
+      this.board[row][col] = 1;
+      if (this.checkWinCondition(this.board)) p1Wins = true;
+      
+      // Check P2
+      this.board[row][col] = 2;
+      if (this.checkWinCondition(this.board)) p2Wins = true;
+      
+      // Reset
+      this.board[row][col] = 0;
+
+      if (p1Wins || p2Wins) {
+        const indicator = document.createElement('div');
+        let colorClass = 'threat-red';
+        if (p1Wins && p2Wins) colorClass = 'threat-dual';
+        else if (p2Wins) colorClass = 'threat-yellow';
+        
+        indicator.className = `threat-indicator ${colorClass}`;
+        indicator.style.left = `calc(${col} * (100% / var(--board-cols)) + (100% / var(--board-cols) - var(--token-size)) / 2)`;
+        indicator.style.top = `calc(${row} * var(--cell-size) + (var(--cell-size) - var(--token-size)) / 2)`;
+        this.tokensContainer.appendChild(indicator);
+      }
+    });
   }
   
   highlightWinningTokens(cells) {
@@ -1050,6 +1212,69 @@ class Game {
       if (board[r][col] === 0) return r;
     }
     return -1;
+  }
+  
+  recordEvaluation() {
+    if (this.gameMode === 'puzzle' || this.gameOver) return;
+    
+    const isP2Turn = this.activePlayer === 2;
+    const score = this.minimax(this.board, 4, -Infinity, Infinity, isP2Turn);
+    
+    const p1Advantage = -score;
+    
+    this.evaluationHistory.push({
+      player: this.activePlayer === 1 ? 2 : 1, // The player who just moved
+      moveNum: this.moveHistory.length,
+      score: p1Advantage
+    });
+  }
+  
+  generateAnalysisReport() {
+    if (this.evaluationHistory.length === 0) {
+      this.analysisContent.innerHTML = "<p>No data available for this game.</p>";
+      return;
+    }
+
+    let biggestBlunder = null;
+    let bestMove = null;
+    let maxDrop = 0;
+    let maxGain = 0;
+    let prevScore = 0; 
+
+    this.evaluationHistory.forEach((evalData) => {
+      let diff = evalData.score - prevScore;
+      let gain = evalData.player === 1 ? diff : -diff;
+      let drop = evalData.player === 1 ? -diff : diff;
+      
+      if (gain > maxGain && gain > 15) { 
+        maxGain = gain;
+        bestMove = evalData;
+      }
+      if (drop > maxDrop && drop > 15) { 
+        maxDrop = drop;
+        biggestBlunder = evalData;
+      }
+      prevScore = evalData.score;
+    });
+
+    let html = `
+      <div style="display: flex; flex-direction: column; gap: 15px;">
+        <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px;">
+          <h3 style="margin-top:0; margin-bottom: 5px; color: #ffeb99;">Biggest Blunder</h3>
+          ${biggestBlunder 
+            ? `<p style="margin:0;">Turn ${biggestBlunder.moveNum} by ${biggestBlunder.player === 1 ? 'Red' : 'Yellow'}.<br>The evaluation dropped significantly, giving away a huge advantage.</p>` 
+            : `<p style="margin:0;">No major blunders detected! A very solid game.</p>`}
+        </div>
+        
+        <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px;">
+          <h3 style="margin-top:0; margin-bottom: 5px; color: #ffeb99;">Best Move</h3>
+          ${bestMove 
+            ? `<p style="margin:0;">Turn ${bestMove.moveNum} by ${bestMove.player === 1 ? 'Red' : 'Yellow'}.<br>A brilliant move that swung the math in their favor.</p>` 
+            : `<p style="margin:0;">No single move stood out. Steady play throughout.</p>`}
+        </div>
+      </div>
+    `;
+    this.analysisContent.innerHTML = html;
   }
   
   getValidMoves(board) {
@@ -1509,6 +1734,7 @@ class Game {
         this.tokensContainer.appendChild(token);
       });
       this.rebuildMoveTracker();
+      this.updateThreatIndicators();
       
       this.renderScores();
       this.updateAllTimeScoreUI();

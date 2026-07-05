@@ -213,6 +213,7 @@
             <button id="mode-pvp" class="mode-btn active" data-mode="pvp">Pass & Play</button>
             <button id="mode-pve" class="mode-btn" data-mode="pve">Vs Computer</button>
             <button id="mode-online" class="mode-btn" data-mode="online">Play with a Friend</button>
+            <button id="mode-puzzle" class="mode-btn" data-mode="puzzle">Training Puzzles 🧩</button>
           </div>
         </div>
 
@@ -287,6 +288,15 @@
             <span style="font-weight: 500; font-size: 15px;">Enable Move Coach</span>
           </div>
         </div>
+        
+        <!-- Threat Indicators Toggle -->
+        <div class="setting-item" id="threats-toggle-group">
+          <label>Threat Indicators</label>
+          <div class="name-inputs-box" style="display: flex; align-items: center; gap: 10px; cursor: pointer;" onclick="document.getElementById('threats-toggle').click()">
+            <input type="checkbox" id="threats-toggle" style="width: 20px; height: 20px; cursor: pointer;" onclick="event.stopPropagation()">
+            <span style="font-weight: 500; font-size: 15px;">Show Lethal Threats (HUD)</span>
+          </div>
+        </div>
 
         <!-- Player Name Inputs -->
         <div class="setting-item" id="player-rename-group">
@@ -325,6 +335,18 @@
       <div class="win-emoji" id="win-emoji">4</div>
       <h2 id="win-title">Player 1 Wins!</h2>
       <p id="win-subtitle">A brilliant victory in 18 moves.</p>
+      <button id="review-game-btn" class="mode-btn active" style="margin-top: 20px; font-size: 16px; padding: 12px 24px; display: none;">Review Game</button>
+    </div>
+  </div>
+  
+  <!-- Analysis Modal -->
+  <div id="analysis-modal" class="win-overlay hidden" role="dialog" aria-modal="true" style="z-index: 2000;">
+    <div class="win-card" style="max-width: 500px; text-align: left;">
+      <h2 style="margin-top:0; text-align: center; color: #fff;">Post-Game Analysis</h2>
+      <div id="analysis-content" style="color: rgba(255,255,255,0.9); font-size: 15px; line-height: 1.5; margin-top: 15px;">
+        <p>Analyzing game data...</p>
+      </div>
+      <button id="close-analysis-btn" class="diff-btn active" style="margin-top: 25px; width: 100%; text-align: center; justify-content: center;">Close Analysis</button>
     </div>
   </div>
 
