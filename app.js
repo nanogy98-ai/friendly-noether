@@ -2,6 +2,27 @@
  * Connect Four - Game Logic Engine
  */
 
+// =========================================================
+// 🔥 FIREBASE REALTIME DATABASE CONFIGURATION 🔥
+// Replace this placeholder config with your actual Firebase project config.
+// =========================================================
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY_HERE",
+  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+  databaseURL: "https://YOUR_PROJECT_ID.firebaseio.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT_ID.appspot.com",
+  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+  appId: "YOUR_APP_ID"
+};
+
+// Initialize Firebase
+if (typeof firebase !== 'undefined' && !firebase.apps.length) {
+  firebase.initializeApp(firebaseConfig);
+}
+const db = typeof firebase !== 'undefined' ? firebase.database() : null;
+// =========================================================
+
 // Sound Controller using Web Audio API
 class SoundController {
   constructor() {
@@ -235,11 +256,13 @@ class Game {
     this.hoveredCol = null;
     
     
-    // WebRTC Online Multiplayer variables
-    this.peer = null;
-    this.peerConn = null;
-    this.peerId = null;
+    // Firebase Online Multiplayer variables
+    this.roomRef = null;
+    this.peerId = null; // acts as roomId
     this.isOnlineHost = false;
+    this.lastMoveCounter = 0;
+    this.localResetTrigger = 0;
+    this.localTimerTrigger = 0;
     
     // Timer
     this.timerSeconds = 0;
@@ -512,8 +535,8 @@ class Game {
       }
       this.updateAllTimeScoreUI();
       this.saveActiveGameState();
-      if (this.gameMode === 'online' && this.peerConn) {
-        this.peerConn.send({ type: 'name_update', name: val });
+      if (this.gameMode === 'online' && this.roomRef && this.isOnlineHost) {
+        this.roomRef.update({ hostName: val });
       }
     });
     
@@ -522,8 +545,8 @@ class Game {
       this.p2NameText.textContent = val;
       this.updateAllTimeScoreUI();
       this.saveActiveGameState();
-      if (this.gameMode === 'online' && this.peerConn) {
-        this.peerConn.send({ type: 'name_update', name: val });
+      if (this.gameMode === 'online' && this.roomRef && !this.isOnlineHost) {
+        this.roomRef.update({ guestName: val });
       }
     });
     
@@ -612,7 +635,7 @@ class Game {
     if (this.gameMode === 'pve' && this.activePlayer === 2) return false;
 
     if (this.gameMode === 'online') {
-      if (!this.peerConn) return false;
+      if (!this.roomRef) return false;
       const myRole = this.isOnlineHost ? 1 : 2;
       if (this.activePlayer !== myRole) {
         if (showAlert) alert("It's not your turn! Please wait for your opponent.");
@@ -628,7 +651,7 @@ class Game {
     this.sounds.playClick();
     
     // Clean up active WebRTC connections
-    this.destroyPeerJS();
+    this.destroyFirebase();
     
     this.gameMode = mode;
     this.updateHintButtonState();
@@ -659,7 +682,7 @@ class Game {
     } else if (mode === 'online') {
       this.modeOnline.classList.add('active');
       this.onlineConfigGroup.classList.remove('hidden');
-      this.initPeerJS(targetId);
+      this.initFirebase(targetId);
       if (this.isOnlineHost) {
         if (this.p1NameInputGroup) this.p1NameInputGroup.classList.remove('hidden');
         this.p2NameInputGroup.classList.add('hidden');
@@ -709,8 +732,9 @@ class Game {
       this.updateAllTimeScoreUI();
       this.saveActiveGameState();
       
-      if (this.gameMode === 'online' && this.peerConn) {
-        this.peerConn.send({ type: 'name_update', name: newName });
+      if (this.gameMode === 'online' && this.roomRef) {
+        if (this.isOnlineHost && player === 1) this.roomRef.update({ hostName: newName });
+        if (!this.isOnlineHost && player === 2) this.roomRef.update({ guestName: newName });
       }
     };
     
@@ -765,16 +789,23 @@ class Game {
     }, 500);
     
     if (this.gameMode === 'online') {
-      if (this.peerConn) {
-        this.peerConn.send({ type: 'move', col: col });
-        this.makeMove(row, col);
+      if (this.roomRef) {
+        this.lastMoveCounter = (this.lastMoveCounter || 0) + 1;
+        this.roomRef.update({
+          lastMove: {
+            player: this.isOnlineHost ? 1 : 2,
+            col: col,
+            counter: this.lastMoveCounter
+          }
+        });
+        this.makeMove(row, col, false);
       }
     } else {
       this.makeMove(row, col);
     }
   }
   
-  makeMove(row, col) {
+  makeMove(row, col, broadcast = true) {
     if (this.moveHistory.length === 0) {
       this.startTimer();
     }
@@ -1012,8 +1043,9 @@ class Game {
     this.updateTimerDisplay();
 
     if (this.gameMode === 'online') {
-      if (shouldBroadcast && this.peerConn) {
-        this.peerConn.send({ type: 'reset' });
+      if (shouldBroadcast && this.roomRef) {
+        this.localResetTrigger = (this.localResetTrigger || 0) + 1;
+        this.roomRef.update({ resetTrigger: this.localResetTrigger });
       }
     } else {
       this.saveActiveGameState();
@@ -1122,78 +1154,88 @@ class Game {
   
   // ================= WEBRTC ONLINE MULTIPLAYER SERVICES =================
   
-  initPeerJS(targetId = null) {
-    this.destroyPeerJS();
+  initFirebase(targetId = null) {
+    this.destroyFirebase();
     
     this.peerStatus.textContent = "Connecting...";
     this.peerStatus.className = "status-badge waiting";
     
+    // Fallback if db isn't initialized yet
+    if (typeof db === 'undefined' || !db) {
+       alert("Firebase is not configured. Please add your config to app.js");
+       this.peerStatus.textContent = "Error";
+       this.peerStatus.className = "status-badge disconnected";
+       return;
+    }
+
     if (targetId) {
+      // Guest joining room
       this.isOnlineHost = false;
       this.p1NameText.textContent = 'Host (Red)';
       this.p2NameText.textContent = this.inputP2Name.value.trim() || 'Guest (Yellow)';
+      
+      this.peerStatus.textContent = "Connecting to Room...";
+      
+      this.roomRef = db.ref('rooms/' + targetId);
+      this.roomRef.once('value').then(snapshot => {
+        if (snapshot.exists()) {
+          const data = snapshot.val();
+          this.p1NameText.textContent = data.hostName || 'Host (Red)';
+          
+          this.roomRef.update({
+            guestName: this.p2NameText.textContent,
+            status: 'playing'
+          }).then(() => {
+            this.setupFirebaseListeners(targetId);
+          });
+        } else {
+          alert("Room not found!");
+          this.peerStatus.textContent = "Room Not Found";
+          this.peerStatus.className = "status-badge disconnected";
+        }
+      });
     } else {
+      // Host creating room
       this.isOnlineHost = true;
       this.p1NameText.textContent = this.inputP1Name.value.trim() || 'Host (Red)';
       this.p2NameText.textContent = 'Waiting...';
-    }
-    this.updateAllTimeScoreUI();
-    
-    // Connect to PeerJS cloud
-    this.peer = new Peer();
-    
-    this.peer.on('open', (id) => {
-      this.peerId = id;
       
-      if (this.isOnlineHost) {
+      const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+      this.peerId = roomId;
+      this.roomRef = db.ref('rooms/' + roomId);
+      
+      this.roomRef.set({
+        hostName: this.p1NameText.textContent,
+        guestName: '',
+        status: 'waiting',
+        moveCounter: 0,
+        resetTrigger: 0,
+        timerData: null
+      }).then(() => {
+        this.setupFirebaseListeners(roomId);
+        
         this.peerStatus.textContent = "Waiting for Friend...";
         this.peerStatus.className = "status-badge waiting";
         
         // Build P2P connection URL
         const origin = window.location.origin;
         const path = window.location.pathname;
-        const shareLink = `${origin}${path}?join=${id}`;
+        const shareLink = `${origin}${path}?join=${roomId}`;
         
         this.onlineShareUrl.value = shareLink;
         this.onlineQrCode.src = `https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(shareLink)}`;
         this.onlineQrCode.style.display = "block";
-      } else {
-        // We are the joiner, connect to target host now that our peer is open
-        this.peerStatus.textContent = "Connecting to Host...";
-        this.peerStatus.className = "status-badge waiting";
-        
-        this.peerConn = this.peer.connect(targetId);
-        this.setupPeerConnListeners(this.peerConn);
-      }
-    });
-    
-    this.peer.on('connection', (conn) => {
-      // Disconnect old connection if new one overrides
-      if (this.peerConn) {
-        this.peerConn.close();
-      }
-      this.peerConn = conn;
-      this.setupPeerConnListeners(conn);
-      
-      this.peerStatus.textContent = "Connected";
-      this.peerStatus.className = "status-badge connected";
-      this.sounds.playClick();
-    });
-    
-    this.peer.on('error', (err) => {
-      console.error("PeerJS Error:", err);
-      this.peerStatus.textContent = "Server Error";
-      this.peerStatus.className = "status-badge disconnected";
-      alert("PeerJS server connection failed: " + err.type);
-    });
+      });
+    }
+    this.updateAllTimeScoreUI();
   }
   
   connectToPeer(targetId) {
     if (!targetId) return;
-    this.initPeerJS(targetId);
+    this.initFirebase(targetId);
   }
   
-  setupPeerConnListeners(conn) {
+  setupFirebaseListeners(roomId) {
     const onConnectionReady = () => {
       this.peerStatus.textContent = "Connected";
       this.peerStatus.className = "status-badge connected";
@@ -1202,90 +1244,70 @@ class Game {
       // Close settings drawer on connection
       this.settingsDrawer.classList.add('hidden');
       
-      // Joiner setup names
-      if (!this.isOnlineHost) {
-        this.p2NameText.textContent = this.inputP2Name.value.trim() || 'Guest (Yellow)';
-        this.p1NameText.textContent = 'Host (Red)';
-      }
-      
-      // Send name
-      const myName = this.isOnlineHost ? this.p1NameText.textContent : this.p2NameText.textContent;
-      conn.send({ type: 'init', name: myName });
       this.updateAllTimeScoreUI();
-      this.restartGame();
+      if (this.isOnlineHost) {
+        this.restartGame({ broadcast: false });
+      }
     };
 
-    if (conn.open) {
-      onConnectionReady();
-    } else {
-      conn.on('open', onConnectionReady);
-    }
-    
-    conn.on('data', (data) => {
-      if (!data) return;
+    let hasConnected = false;
+
+    this.roomRef.on('value', (snapshot) => {
+      if (!snapshot.exists()) return;
+      const data = snapshot.val();
       
-      switch (data.type) {
-        case 'init':
-          if (this.isOnlineHost) {
-            this.p2NameText.textContent = data.name;
-          } else {
-            this.p1NameText.textContent = data.name;
-          }
-          this.updateAllTimeScoreUI();
-          break;
-          
-        case 'name_update':
-          if (this.isOnlineHost) {
-            this.p2NameText.textContent = data.name;
-          } else {
-            this.p1NameText.textContent = data.name;
-          }
-          this.updateAllTimeScoreUI();
-          break;
-          
-        case 'move':
-          const row = this.getNextOpenRow(this.board, data.col);
-          if (row !== -1) {
-            this.makeMove(row, data.col);
-          }
-          break;
-          
-        case 'reset':
-          this.restartGame({ broadcast: false });
-          break;
-          
-        case 'timer_sync':
-          this.timerSeconds = data.seconds;
-          if (data.p1Time !== undefined) {
-            this.p1TimeRemaining = data.p1Time;
-            this.p2TimeRemaining = data.p2Time;
-            this.updatePlayerTimersUI();
-            if (this.p1TimeRemaining <= 0) this.handleTimeout(1);
-            if (this.p2TimeRemaining <= 0) this.handleTimeout(2);
-          }
-          this.updateTimerDisplay();
-          break;
+      if (data.status === 'playing' && !hasConnected) {
+        hasConnected = true;
+        onConnectionReady();
       }
-    });
-    
-    conn.on('close', () => {
-      this.peerStatus.textContent = "Disconnected";
-      this.peerStatus.className = "status-badge disconnected";
-      this.peerConn = null;
-      alert("Your opponent has disconnected.");
+      
+      if (this.isOnlineHost && data.guestName && data.guestName !== this.p2NameText.textContent) {
+        this.p2NameText.textContent = data.guestName;
+        this.updateAllTimeScoreUI();
+      } else if (!this.isOnlineHost && data.hostName && data.hostName !== this.p1NameText.textContent) {
+        this.p1NameText.textContent = data.hostName;
+        this.updateAllTimeScoreUI();
+      }
+      
+      if (data.lastMove && data.lastMove.counter > (this.lastMoveCounter || 0)) {
+        this.lastMoveCounter = data.lastMove.counter;
+        if (data.lastMove.player !== (this.isOnlineHost ? 1 : 2)) {
+          const row = this.getNextOpenRow(this.board, data.lastMove.col);
+          if (row !== -1) {
+            this.makeMove(row, data.lastMove.col, false);
+          }
+        }
+      }
+      
+      if (data.resetTrigger && data.resetTrigger > (this.localResetTrigger || 0)) {
+        this.localResetTrigger = data.resetTrigger;
+        this.restartGame({ broadcast: false });
+      }
+      
+      if (!this.isOnlineHost && data.timerData && data.timerData.trigger > (this.localTimerTrigger || 0)) {
+        this.localTimerTrigger = data.timerData.trigger;
+        this.timerSeconds = data.timerData.seconds;
+        if (data.timerData.p1Time !== undefined) {
+          this.p1TimeRemaining = data.timerData.p1Time;
+          this.p2TimeRemaining = data.timerData.p2Time;
+          this.updatePlayerTimersUI();
+          if (this.p1TimeRemaining <= 0) this.handleTimeout(1);
+          if (this.p2TimeRemaining <= 0) this.handleTimeout(2);
+        }
+        this.updateTimerDisplay();
+      }
     });
   }
   
-  destroyPeerJS() {
-    if (this.peerConn) {
-      this.peerConn.close();
-      this.peerConn = null;
-    }
-    if (this.peer) {
-      this.peer.destroy();
-      this.peer = null;
+  destroyFirebase() {
+    if (this.roomRef) {
+      this.roomRef.off();
+      this.roomRef = null;
     }
     this.peerId = null;
+    this.lastMoveCounter = 0;
+    this.localResetTrigger = 0;
+    this.localTimerTrigger = 0;
     if (this.peerStatus) {
       this.peerStatus.textContent = "Idle";
       this.peerStatus.className = "status-badge disconnected";
@@ -1304,13 +1326,16 @@ class Game {
       
       this.tickPlayerClocks();
 
-      // WebRTC Host clock broadcast
-      if (this.gameMode === 'online' && this.isOnlineHost && this.peerConn && !this.gameOver) {
-        this.peerConn.send({ 
-          type: 'timer_sync', 
-          seconds: this.timerSeconds,
-          p1Time: this.p1TimeRemaining,
-          p2Time: this.p2TimeRemaining
+      // Firebase Host clock broadcast
+      if (this.gameMode === 'online' && this.isOnlineHost && this.roomRef && !this.gameOver) {
+        this.localTimerTrigger = (this.localTimerTrigger || 0) + 1;
+        this.roomRef.update({ 
+          timerData: {
+            trigger: this.localTimerTrigger,
+            seconds: this.timerSeconds,
+            p1Time: this.p1TimeRemaining,
+            p2Time: this.p2TimeRemaining
+          }
         });
       }
     }, 1000);
