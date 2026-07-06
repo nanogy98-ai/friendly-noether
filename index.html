@@ -241,7 +241,7 @@
           </div>
         </div>
 
-        <!-- Online WebRTC Configuration -->
+        <!-- Online Configuration -->
         <div id="online-config-group" class="setting-item hidden">
           <label>Online Match Settings</label>
           
@@ -318,6 +318,19 @@
         </div>
 
       </div>
+    </div>
+  </div>
+
+  <!-- Host Pre-Game Overlay -->
+  <div id="host-overlay" class="win-overlay hidden" role="dialog" aria-live="polite">
+    <div class="win-card" style="padding: 3rem; max-width: 400px; width: 90%;">
+      <h2 style="margin-bottom: 1rem; color: var(--text-color);">Create Game</h2>
+      <p style="color: var(--text-muted); margin-bottom: 1.5rem;">Enter your name and choose your settings before creating the room.</p>
+      <div class="input-group">
+        <label for="host-name-input">Your Name</label>
+        <input type="text" id="host-name-input" placeholder="Host (Red)" maxlength="15" autocomplete="off">
+      </div>
+      <button id="host-create-btn" class="action-btn" style="margin-top: 1rem; width: 100%;">Create Room</button>
     </div>
   </div>
 

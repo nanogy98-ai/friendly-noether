@@ -400,6 +400,11 @@ class Game {
     this.joinNameInput = document.getElementById('join-name-input');
     this.joinRoomBtn = document.getElementById('join-room-btn');
     
+    // Host overlay
+    this.hostOverlay = document.getElementById('host-overlay');
+    this.hostNameInput = document.getElementById('host-name-input');
+    this.hostCreateBtn = document.getElementById('host-create-btn');
+    
     // Coach and Move Tracker
     this.coachPanel = document.getElementById('coach-panel');
     this.coachIcon = document.getElementById('coach-icon');
@@ -450,6 +455,21 @@ class Game {
 
     this.joinNameInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') this.joinRoomBtn.click();
+    });
+
+    // Host Create Game Modal
+    this.hostCreateBtn.addEventListener('click', () => {
+      const val = this.hostNameInput.value.trim() || 'Host (Red)';
+      this.inputP1Name.value = val;
+      this.p1NameText.textContent = val;
+      this.hostOverlay.classList.add('hidden');
+      this.sounds.playClick();
+      // Now actually create the room
+      this.initFirebase(null);
+    });
+
+    this.hostNameInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') this.hostCreateBtn.click();
     });
 
     // Column hover and click triggers
@@ -707,7 +727,17 @@ class Game {
     } else if (mode === 'online') {
       this.modeOnline.classList.add('active');
       this.onlineConfigGroup.classList.remove('hidden');
-      this.initFirebase(targetId);
+      if (targetId) {
+        // Guest joining — initFirebase immediately (name was entered in join overlay)
+        this.initFirebase(targetId);
+      } else {
+        // Host creating — show host overlay to enter name first
+        // Don't call initFirebase yet; the hostCreateBtn handler will do that
+        this.isOnlineHost = true;
+        this.hostNameInput.value = this.inputP1Name.value.trim() || '';
+        this.hostOverlay.classList.remove('hidden');
+        this.hostNameInput.focus();
+      }
       if (this.isOnlineHost) {
         if (this.p1NameInputGroup) this.p1NameInputGroup.classList.remove('hidden');
         this.p2NameInputGroup.classList.add('hidden');
@@ -720,7 +750,7 @@ class Game {
     this.updateAllTimeScoreUI();
     this.renderScores();
     // Don't call restartGame when joining as a Guest — the Host controls game resets
-    if (mode !== 'online' || this.isOnlineHost) {
+    if (mode !== 'online') {
       this.restartGame({ broadcast: false });
     }
   }
@@ -1257,13 +1287,22 @@ class Game {
       }).then(() => {
         this.setupFirebaseListeners(roomId);
         
+        // Close settings drawer and prep the board
+        this.settingsDrawer.classList.add('hidden');
+        this.restartGame({ broadcast: false });
+        
         this.peerStatus.textContent = "Waiting for Friend...";
         this.peerStatus.className = "status-badge waiting";
         
-        // Build P2P connection URL
-        const origin = window.location.origin;
-        const path = window.location.pathname;
-        const shareLink = `${origin}${path}?join=${roomId}`;
+        // Build share link — handle file:// protocol and http(s)
+        let shareLink;
+        if (window.location.protocol === 'file:') {
+          shareLink = `${window.location.href.split('?')[0]}?join=${roomId}`;
+        } else {
+          const origin = window.location.origin;
+          const path = window.location.pathname;
+          shareLink = `${origin}${path}?join=${roomId}`;
+        }
         
         this.onlineShareUrl.value = shareLink;
         this.onlineQrCode.src = `https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(shareLink)}`;

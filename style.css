@@ -2116,8 +2116,9 @@ body {
   }
 }
 
-/* Fullscreen Join Room Modal */
-#join-overlay {
+/* Fullscreen Game Lobby Modals (Host + Join) */
+#join-overlay,
+#host-overlay {
   position: fixed;
   top: 0;
   left: 0;
@@ -2126,21 +2127,25 @@ body {
   transform: none;
   background: rgba(4, 8, 20, 0.95);
   z-index: 2000;
-  pointer-events: auto; /* Fully clickable */
+  pointer-events: auto;
   display: flex;
   justify-content: center;
   align-items: center;
+  transition: opacity 0.3s ease;
 }
 
-#join-overlay.hidden {
+#join-overlay.hidden,
+#host-overlay.hidden {
   opacity: 0;
   pointer-events: none;
 }
 
-#join-overlay .win-card {
+#join-overlay .win-card,
+#host-overlay .win-card {
   transform: scale(1) translateY(0);
 }
 
-#join-overlay.hidden .win-card {
+#join-overlay.hidden .win-card,
+#host-overlay.hidden .win-card {
   transform: scale(0.9) translateY(20px);
 }
