@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23060b1c'/%3E%3Ccircle cx='24' cy='24' r='9' fill='%23ff2a2a'/%3E%3Ccircle cx='40' cy='24' r='9' fill='%23ffbc00'/%3E%3Ccircle cx='24' cy='40' r='9' fill='%23ffbc00'/%3E%3Ccircle cx='40' cy='40' r='9' fill='%23ff2a2a'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="style.css?v=5">
+  <link rel="stylesheet" href="style.css?v=6">
   <!-- Firebase App (the core Firebase SDK) -->
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
   <!-- Firebase Realtime Database -->
@@ -321,29 +321,17 @@
     </div>
   </div>
 
-  <!-- Host Pre-Game Overlay -->
-  <div id="host-overlay" class="win-overlay hidden" role="dialog" aria-live="polite">
-    <div class="win-card" style="padding: 3rem; max-width: 400px; width: 90%;">
-      <h2 style="margin-bottom: 1rem; color: var(--text-color);">Create Game</h2>
-      <p style="color: var(--text-muted); margin-bottom: 1.5rem;">Enter your name and choose your settings before creating the room.</p>
-      <div class="input-group">
-        <label for="host-name-input">Your Name</label>
-        <input type="text" id="host-name-input" placeholder="Host (Red)" maxlength="15" autocomplete="off">
-      </div>
-      <button id="host-create-btn" class="action-btn" style="margin-top: 1rem; width: 100%;">Create Room</button>
-    </div>
-  </div>
-
   <!-- Join Room Overlay -->
-  <div id="join-overlay" class="win-overlay hidden" role="dialog" aria-live="polite">
-    <div class="win-card" style="padding: 3rem; max-width: 400px; width: 90%;">
-      <h2 style="margin-bottom: 1rem; color: var(--text-color);">Join Game</h2>
-      <p style="color: var(--text-muted); margin-bottom: 1.5rem;">You've been invited to play! Enter your name to join the room.</p>
-      <div class="input-group">
-        <label for="join-name-input">Your Name</label>
-        <input type="text" id="join-name-input" placeholder="Guest (Yellow)" maxlength="15" autocomplete="off">
+  <div id="join-overlay" class="join-overlay hidden">
+    <div class="join-card">
+      <div class="join-icon">🎮</div>
+      <h2 class="join-title">Join Game</h2>
+      <p class="join-subtitle">You've been invited to play Connect 4!</p>
+      <div class="join-input-wrapper">
+        <span class="dot-bullet yellow"></span>
+        <input type="text" id="join-name-input" placeholder="Enter your name" maxlength="15" autocomplete="off">
       </div>
-      <button id="join-room-btn" class="action-btn" style="margin-top: 1rem; width: 100%;">Join Room</button>
+      <button id="join-room-btn" class="join-btn">Join Room</button>
     </div>
   </div>
 
@@ -359,6 +347,6 @@
   <!-- Canvas for Confetti -->
   <canvas id="confetti-canvas" class="confetti-canvas"></canvas>
 
-  <script src="app.js?v=5"></script>
+  <script src="app.js?v=6"></script>
 </body>
 </html>

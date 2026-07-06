@@ -291,22 +291,29 @@ class Game {
     this.loadAllTimeScores();
     this.initDOM();
     
-    // Try to restore saved game session, else load default scoreboard
-    if (!this.restoreActiveGameState()) {
-      this.loadStats();
-      this.renderScores();
-      this.updateTurnUI();
-      this.startTimer();
-    }
-    
     // Parse URL check for online P2P join request
     const urlParams = new URLSearchParams(window.location.search);
     const joinRoomId = urlParams.get('join');
+    
     if (joinRoomId) {
+      // Guest arriving via invite link — wipe any saved local game so old tokens don't appear
+      localStorage.removeItem('connect4_active_game');
+      this.loadStats();
+      this.renderScores();
+      this.updateTurnUI();
+      // Show the join overlay
       setTimeout(() => {
         this.joinOverlay.classList.remove('hidden');
         this.joinNameInput.focus();
       }, 300);
+    } else {
+      // Normal load — try to restore saved game session
+      if (!this.restoreActiveGameState()) {
+        this.loadStats();
+        this.renderScores();
+        this.updateTurnUI();
+        this.startTimer();
+      }
     }
     this.updateHintButtonState();
   }
@@ -400,11 +407,6 @@ class Game {
     this.joinNameInput = document.getElementById('join-name-input');
     this.joinRoomBtn = document.getElementById('join-room-btn');
     
-    // Host overlay
-    this.hostOverlay = document.getElementById('host-overlay');
-    this.hostNameInput = document.getElementById('host-name-input');
-    this.hostCreateBtn = document.getElementById('host-create-btn');
-    
     // Coach and Move Tracker
     this.coachPanel = document.getElementById('coach-panel');
     this.coachIcon = document.getElementById('coach-icon');
@@ -455,21 +457,6 @@ class Game {
 
     this.joinNameInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') this.joinRoomBtn.click();
-    });
-
-    // Host Create Game Modal
-    this.hostCreateBtn.addEventListener('click', () => {
-      const val = this.hostNameInput.value.trim() || 'Host (Red)';
-      this.inputP1Name.value = val;
-      this.p1NameText.textContent = val;
-      this.hostOverlay.classList.add('hidden');
-      this.sounds.playClick();
-      // Now actually create the room
-      this.initFirebase(null);
-    });
-
-    this.hostNameInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') this.hostCreateBtn.click();
     });
 
     // Column hover and click triggers
@@ -727,17 +714,8 @@ class Game {
     } else if (mode === 'online') {
       this.modeOnline.classList.add('active');
       this.onlineConfigGroup.classList.remove('hidden');
-      if (targetId) {
-        // Guest joining — initFirebase immediately (name was entered in join overlay)
-        this.initFirebase(targetId);
-      } else {
-        // Host creating — show host overlay to enter name first
-        // Don't call initFirebase yet; the hostCreateBtn handler will do that
-        this.isOnlineHost = true;
-        this.hostNameInput.value = this.inputP1Name.value.trim() || '';
-        this.hostOverlay.classList.remove('hidden');
-        this.hostNameInput.focus();
-      }
+      // Create or join the Firebase room immediately
+      this.initFirebase(targetId);
       if (this.isOnlineHost) {
         if (this.p1NameInputGroup) this.p1NameInputGroup.classList.remove('hidden');
         this.p2NameInputGroup.classList.add('hidden');
@@ -749,10 +727,8 @@ class Game {
     
     this.updateAllTimeScoreUI();
     this.renderScores();
-    // Don't call restartGame when joining as a Guest — the Host controls game resets
-    if (mode !== 'online') {
-      this.restartGame({ broadcast: false });
-    }
+    // Always clear the board when switching modes
+    this.restartGame({ broadcast: false });
   }
 
   editPlayerNameInline(player) {
@@ -1287,10 +1263,7 @@ class Game {
       }).then(() => {
         this.setupFirebaseListeners(roomId);
         
-        // Close settings drawer and prep the board
-        this.settingsDrawer.classList.add('hidden');
-        this.restartGame({ broadcast: false });
-        
+        // Keep settings drawer OPEN so Host can copy the share link
         this.peerStatus.textContent = "Waiting for Friend...";
         this.peerStatus.className = "status-badge waiting";
         
