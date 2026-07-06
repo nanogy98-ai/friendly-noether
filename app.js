@@ -358,6 +358,7 @@ class Game {
     // Name inputs
     this.inputP1Name = document.getElementById('input-p1-name');
     this.inputP2Name = document.getElementById('input-p2-name');
+    this.p1NameInputGroup = document.getElementById('p1-name-input-group');
     this.p2NameInputGroup = document.getElementById('p2-name-input-group');
     
     this.drawsStat = document.getElementById('draws-stat');
@@ -644,19 +645,28 @@ class Game {
     
     if (mode === 'pvp') {
       this.modePvP.classList.add('active');
+      if (this.p1NameInputGroup) this.p1NameInputGroup.classList.remove('hidden');
+      this.p2NameInputGroup.classList.remove('hidden');
       this.p1NameText.textContent = this.inputP1Name.value.trim() || 'Red Player';
       this.p2NameText.textContent = this.inputP2Name.value.trim() || 'Yellow Player';
     } else if (mode === 'pve') {
       this.modePvE.classList.add('active');
       this.difficultyGroup.classList.remove('hidden');
+      if (this.p1NameInputGroup) this.p1NameInputGroup.classList.remove('hidden');
+      this.p2NameInputGroup.classList.add('hidden');
       this.p1NameText.textContent = this.inputP1Name.value.trim() || 'Red Player';
       this.p2NameText.textContent = 'Computer';
-      this.p2NameInputGroup.classList.add('hidden');
     } else if (mode === 'online') {
       this.modeOnline.classList.add('active');
       this.onlineConfigGroup.classList.remove('hidden');
-      this.p2NameInputGroup.classList.add('hidden'); // Opponent name will sync automatically
       this.initPeerJS(targetId);
+      if (this.isOnlineHost) {
+        if (this.p1NameInputGroup) this.p1NameInputGroup.classList.remove('hidden');
+        this.p2NameInputGroup.classList.add('hidden');
+      } else {
+        if (this.p1NameInputGroup) this.p1NameInputGroup.classList.add('hidden');
+        this.p2NameInputGroup.classList.remove('hidden');
+      }
     }
     
     this.updateAllTimeScoreUI();
@@ -1121,7 +1131,7 @@ class Game {
     if (targetId) {
       this.isOnlineHost = false;
       this.p1NameText.textContent = 'Host (Red)';
-      this.p2NameText.textContent = this.inputP1Name.value.trim() || 'Guest (Yellow)';
+      this.p2NameText.textContent = this.inputP2Name.value.trim() || 'Guest (Yellow)';
     } else {
       this.isOnlineHost = true;
       this.p1NameText.textContent = this.inputP1Name.value.trim() || 'Host (Red)';
@@ -1194,7 +1204,7 @@ class Game {
       
       // Joiner setup names
       if (!this.isOnlineHost) {
-        this.p2NameText.textContent = this.inputP1Name.value.trim() || 'Guest (Yellow)';
+        this.p2NameText.textContent = this.inputP2Name.value.trim() || 'Guest (Yellow)';
         this.p1NameText.textContent = 'Host (Red)';
       }
       
@@ -1497,10 +1507,12 @@ class Game {
       document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
       if (this.gameMode === 'pvp') {
         this.modePvP.classList.add('active');
+        if (this.p1NameInputGroup) this.p1NameInputGroup.classList.remove('hidden');
         this.p2NameInputGroup.classList.remove('hidden');
       } else if (this.gameMode === 'pve') {
         this.modePvE.classList.add('active');
         this.difficultyGroup.classList.remove('hidden');
+        if (this.p1NameInputGroup) this.p1NameInputGroup.classList.remove('hidden');
         this.p2NameInputGroup.classList.add('hidden');
       }
       
