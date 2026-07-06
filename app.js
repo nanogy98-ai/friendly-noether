@@ -1194,7 +1194,7 @@ class Game {
   }
   
   setupPeerConnListeners(conn) {
-    conn.on('open', () => {
+    const onConnectionReady = () => {
       this.peerStatus.textContent = "Connected";
       this.peerStatus.className = "status-badge connected";
       this.sounds.playClick();
@@ -1213,7 +1213,13 @@ class Game {
       conn.send({ type: 'init', name: myName });
       this.updateAllTimeScoreUI();
       this.restartGame();
-    });
+    };
+
+    if (conn.open) {
+      onConnectionReady();
+    } else {
+      conn.on('open', onConnectionReady);
+    }
     
     conn.on('data', (data) => {
       if (!data) return;
