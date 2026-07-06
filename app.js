@@ -719,7 +719,10 @@ class Game {
     
     this.updateAllTimeScoreUI();
     this.renderScores();
-    this.restartGame();
+    // Don't call restartGame when joining as a Guest — the Host controls game resets
+    if (mode !== 'online' || this.isOnlineHost) {
+      this.restartGame({ broadcast: false });
+    }
   }
 
   editPlayerNameInline(player) {
@@ -831,7 +834,10 @@ class Game {
   }
   
   makeMove(row, col, broadcast = true) {
-    if (this.moveHistory.length === 0) {
+    if (this.moveHistory.length === 0 && (this.gameMode !== 'online' || this.isOnlineHost)) {
+      this.startTimer();
+    } else if (this.moveHistory.length === 0 && this.gameMode === 'online' && !this.isOnlineHost && broadcast) {
+      // Guest makes first move — start timer now
       this.startTimer();
     }
     this.board[row][col] = this.activePlayer;
@@ -859,7 +865,9 @@ class Game {
     // Disable undo for network matches
     this.undoBtn.disabled = this.gameMode === 'online';
     
-    this.saveActiveGameState();
+    if (this.gameMode !== 'online') {
+      this.saveActiveGameState();
+    }
     
     setTimeout(() => {
       this.animating = false;
@@ -1241,7 +1249,11 @@ class Game {
         status: 'waiting',
         moveCounter: 0,
         resetTrigger: 0,
-        timerData: null
+        timerData: null,
+        gameConfig: {
+          timeControl: this.timeControl,
+          matchTargetWins: this.matchTargetWins
+        }
       }).then(() => {
         this.setupFirebaseListeners(roomId);
         
@@ -1277,6 +1289,10 @@ class Game {
       
       this.updateAllTimeScoreUI();
       if (this.isOnlineHost) {
+        // Host starts a fresh game and broadcasts the reset
+        this.restartGame({ broadcast: true });
+      } else {
+        // Guest clears the board locally — Host controls state
         this.restartGame({ broadcast: false });
       }
     };
@@ -1286,12 +1302,32 @@ class Game {
     this.roomRef.on('value', (snapshot) => {
       if (!snapshot.exists()) return;
       const data = snapshot.val();
-      
+
+      // --- Guest: Sync config from DB on very first snapshot ---
+      if (!this.isOnlineHost && data.gameConfig && !hasConnected) {
+        this.timeControl = data.gameConfig.timeControl ?? this.timeControl;
+        this.matchTargetWins = data.gameConfig.matchTargetWins ?? this.matchTargetWins;
+        this.p1TimeRemaining = this.timeControl;
+        this.p2TimeRemaining = this.timeControl;
+        this.updateMatchFormatUI();
+        this.updatePlayerTimersUI();
+        document.querySelectorAll('.time-btn').forEach(b => {
+          b.classList.toggle('active', parseInt(b.dataset.time, 10) === this.timeControl);
+        });
+        document.querySelectorAll('.match-btn').forEach(b => {
+          b.classList.toggle('active', parseInt(b.dataset.wins, 10) === this.matchTargetWins);
+        });
+      }
+
+      // --- Connection handshake ---
       if (data.status === 'playing' && !hasConnected) {
         hasConnected = true;
+        // Pre-seed the move counter so we don't replay old moves
+        this.lastMoveCounter = data.lastMove ? (data.lastMove.counter || 0) : 0;
         onConnectionReady();
       }
-      
+
+      // --- Name sync ---
       if (this.isOnlineHost && data.guestName && data.guestName !== this.p2NameText.textContent) {
         this.p2NameText.textContent = data.guestName;
         this.updateAllTimeScoreUI();
@@ -1299,24 +1335,18 @@ class Game {
         this.p1NameText.textContent = data.hostName;
         this.updateAllTimeScoreUI();
       }
-      
-      if (data.lastMove && data.lastMove.counter > (this.lastMoveCounter || 0)) {
-        this.lastMoveCounter = data.lastMove.counter;
-        if (data.lastMove.player !== (this.isOnlineHost ? 1 : 2)) {
-          const row = this.getNextOpenRow(this.board, data.lastMove.col);
-          if (row !== -1) {
-            this.makeMove(row, data.lastMove.col, false);
-          }
-        }
-      }
-      
-      if (!this.isOnlineHost && data.gameConfig) {
+
+      // --- Config sync (mid-game host change) ---
+      if (!this.isOnlineHost && hasConnected && data.gameConfig) {
         if (this.timeControl !== data.gameConfig.timeControl || this.matchTargetWins !== data.gameConfig.matchTargetWins) {
           this.timeControl = data.gameConfig.timeControl;
           this.matchTargetWins = data.gameConfig.matchTargetWins;
+          if (this.moveHistory.length === 0) {
+            this.p1TimeRemaining = this.timeControl;
+            this.p2TimeRemaining = this.timeControl;
+          }
           this.updateMatchFormatUI();
           this.updatePlayerTimersUI();
-          
           document.querySelectorAll('.time-btn').forEach(b => {
             b.classList.toggle('active', parseInt(b.dataset.time, 10) === this.timeControl);
           });
@@ -1326,14 +1356,36 @@ class Game {
         }
       }
 
-      if (data.resetTrigger && data.resetTrigger > (this.localResetTrigger || 0)) {
+      // --- Opponent move ---
+      if (hasConnected && data.lastMove && data.lastMove.counter > (this.lastMoveCounter || 0)) {
+        this.lastMoveCounter = data.lastMove.counter;
+        if (data.lastMove.player !== (this.isOnlineHost ? 1 : 2)) {
+          const row = this.getNextOpenRow(this.board, data.lastMove.col);
+          if (row !== -1) {
+            this.makeMove(row, data.lastMove.col, false);
+          }
+        }
+      }
+
+      // --- Reset trigger ---
+      if (hasConnected && data.resetTrigger && data.resetTrigger > (this.localResetTrigger || 0)) {
         this.localResetTrigger = data.resetTrigger;
+        // Sync config on reset too
+        if (data.gameConfig) {
+          this.timeControl = data.gameConfig.timeControl ?? this.timeControl;
+          this.matchTargetWins = data.gameConfig.matchTargetWins ?? this.matchTargetWins;
+        }
         this.restartGame({ broadcast: false });
       }
-      
+
+      // --- Timer sync (Guest side only, driven by Host) ---
       if (!this.isOnlineHost && data.timerData && data.timerData.trigger > (this.localTimerTrigger || 0)) {
         this.localTimerTrigger = data.timerData.trigger;
         this.timerSeconds = data.timerData.seconds;
+        // Start Guest's display timer if not already running
+        if (!this.timerInterval && !this.gameOver && this.moveHistory.length > 0) {
+          this.resumeTimer();
+        }
         if (data.timerData.p1Time !== undefined) {
           this.p1TimeRemaining = data.timerData.p1Time;
           this.p2TimeRemaining = data.timerData.p2Time;

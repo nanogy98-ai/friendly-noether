@@ -2115,3 +2115,32 @@ body {
     height: 180px;
   }
 }
+
+/* Fullscreen Join Room Modal */
+#join-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  transform: none;
+  background: rgba(4, 8, 20, 0.95);
+  z-index: 2000;
+  pointer-events: auto; /* Fully clickable */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+#join-overlay.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+#join-overlay .win-card {
+  transform: scale(1) translateY(0);
+}
+
+#join-overlay.hidden .win-card {
+  transform: scale(0.9) translateY(20px);
+}
