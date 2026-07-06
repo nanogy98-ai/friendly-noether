@@ -932,27 +932,7 @@ class Game {
         }, 3500);
       }, 750);
     } else if (this.isBoardFull()) {
-      this.gameOver = true;
-      this.pauseTimer();
-      this.scores[this.gameMode].draws++;
-      this.saveStats();
-      this.saveActiveGameState();
-      this.renderScores();
-      
-      this.turnText.textContent = "It's a Draw!";
-      this.turnColorIndicator.className = 'turn-color-indicator';
-      
-      this.winTitle.textContent = "Match Draw!";
-      this.winSubtitle.textContent = "A perfect defensive grid from both sides.";
-      this.winEmoji.textContent = '🤝';
-      
-      setTimeout(() => {
-        this.winOverlay.classList.remove('hidden');
-        setTimeout(() => {
-          this.winOverlay.classList.add('hidden');
-        }, 3500);
-      }, 750);
-      
+      this.handleDraw();
     } else {
       this.activePlayer = this.activePlayer === 1 ? 2 : 1;
       this.updateTurnUI();
@@ -965,6 +945,11 @@ class Game {
   }
   
   triggerComputerMove() {
+    if (this.gameOver || this.getValidMoves(this.board).length === 0) {
+      this.handleDraw();
+      return;
+    }
+
     this.animating = true;
     this.turnText.textContent = "Computer is thinking...";
     
@@ -976,8 +961,37 @@ class Game {
         this.makeMove(computerRow, computerCol);
       } else {
         this.animating = false;
+        this.handleDraw();
       }
     }, 600);
+  }
+
+  handleDraw() {
+    if (this.gameOver) return;
+
+    this.gameOver = true;
+    this.animating = false;
+    this.pauseTimer();
+    this.scores[this.gameMode].draws++;
+    this.saveStats();
+    this.saveActiveGameState();
+    this.renderScores();
+
+    this.turnText.textContent = "It's a Draw!";
+    this.turnColorIndicator.className = 'turn-color-indicator';
+    this.p1Card.classList.remove('active');
+    this.p2Card.classList.remove('active');
+
+    this.winTitle.textContent = "Match Draw!";
+    this.winSubtitle.textContent = "A perfect defensive grid from both sides.";
+    this.winEmoji.textContent = '🤝';
+
+    setTimeout(() => {
+      this.winOverlay.classList.remove('hidden');
+      setTimeout(() => {
+        this.winOverlay.classList.add('hidden');
+      }, 3500);
+    }, 750);
   }
   
   showHint() {
@@ -1102,6 +1116,21 @@ class Game {
     const p2Card = this.p2Card;
     const p1Name = this.p1NameText.textContent;
     const p2Name = this.p2NameText.textContent;
+
+    if (this.gameOver) {
+      const winInfo = this.checkWinCondition(this.board);
+      if (winInfo) {
+        const winnerName = winInfo.player === 1 ? p1Name : p2Name;
+        this.turnText.textContent = `${winnerName} Wins!`;
+        this.turnColorIndicator.className = `turn-color-indicator ${winInfo.player === 1 ? 'red' : 'yellow'}`;
+      } else if (this.isBoardFull()) {
+        this.turnText.textContent = "It's a Draw!";
+        this.turnColorIndicator.className = 'turn-color-indicator';
+        p1Card.classList.remove('active');
+        p2Card.classList.remove('active');
+      }
+      return;
+    }
     
     if (this.activePlayer === 1) {
       p1Card.classList.add('active');
@@ -1161,7 +1190,7 @@ class Game {
   }
   
   isBoardFull() {
-    return this.moveHistory.length === this.rows * this.cols;
+    return this.moveHistory.length > 0 && this.getValidMoves(this.board).length === 0;
   }
   
   checkWinCondition(b) {
@@ -1688,6 +1717,9 @@ class Game {
       } else {
         if (this.moveHistory.length > 0) {
           this.resumeTimer();
+        }
+        if (this.gameMode === 'pve' && this.activePlayer === 2) {
+          this.triggerComputerMove();
         }
       }
       

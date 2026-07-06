@@ -105,7 +105,7 @@ body {
   display: grid;
   grid-template-columns: 220px 1fr 220px;
   gap: 50px;
-  align-items: center;
+  align-items: start;
   flex-grow: 1;
 }
 
@@ -1425,13 +1425,13 @@ body {
 .game-main-layout {
   grid-template-columns: 230px minmax(520px, 1fr) 230px;
   gap: clamp(28px, 4vw, 56px);
-  align-items: center;
+  align-items: start;
 }
 
 .side-panel {
   gap: 18px;
   min-height: calc(var(--cell-size) * var(--board-rows));
-  justify-content: center;
+  justify-content: flex-start;
   position: relative;
 }
 
