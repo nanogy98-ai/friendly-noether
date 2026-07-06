@@ -304,8 +304,9 @@ class Game {
     const joinRoomId = urlParams.get('join');
     if (joinRoomId) {
       setTimeout(() => {
-        this.switchMode('online', joinRoomId);
-      }, 750);
+        this.joinOverlay.classList.remove('hidden');
+        this.joinNameInput.focus();
+      }, 300);
     }
     this.updateHintButtonState();
   }
@@ -394,6 +395,11 @@ class Game {
     this.winSubtitle = document.getElementById('win-subtitle');
     this.winEmoji = document.getElementById('win-emoji');
     
+    // Join overlay
+    this.joinOverlay = document.getElementById('join-overlay');
+    this.joinNameInput = document.getElementById('join-name-input');
+    this.joinRoomBtn = document.getElementById('join-room-btn');
+    
     // Coach and Move Tracker
     this.coachPanel = document.getElementById('coach-panel');
     this.coachIcon = document.getElementById('coach-icon');
@@ -427,6 +433,25 @@ class Game {
   }
   
   bindEvents() {
+    // Join Game Modal
+    this.joinRoomBtn.addEventListener('click', () => {
+      const val = this.joinNameInput.value.trim() || 'Guest (Yellow)';
+      this.inputP2Name.value = val;
+      this.p2NameText.textContent = val;
+      this.joinOverlay.classList.add('hidden');
+      this.sounds.playClick();
+      
+      const urlParams = new URLSearchParams(window.location.search);
+      const joinRoomId = urlParams.get('join');
+      if (joinRoomId) {
+        this.switchMode('online', joinRoomId);
+      }
+    });
+
+    this.joinNameInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') this.joinRoomBtn.click();
+    });
+
     // Column hover and click triggers
     this.columnsContainer.addEventListener('click', (e) => {
       const colEl = e.target.closest('.board-column');
@@ -1045,7 +1070,13 @@ class Game {
     if (this.gameMode === 'online') {
       if (shouldBroadcast && this.roomRef) {
         this.localResetTrigger = (this.localResetTrigger || 0) + 1;
-        this.roomRef.update({ resetTrigger: this.localResetTrigger });
+        this.roomRef.update({ 
+          resetTrigger: this.localResetTrigger,
+          gameConfig: {
+            timeControl: this.timeControl,
+            matchTargetWins: this.matchTargetWins
+          }
+        });
       }
     } else {
       this.saveActiveGameState();
@@ -1279,6 +1310,22 @@ class Game {
         }
       }
       
+      if (!this.isOnlineHost && data.gameConfig) {
+        if (this.timeControl !== data.gameConfig.timeControl || this.matchTargetWins !== data.gameConfig.matchTargetWins) {
+          this.timeControl = data.gameConfig.timeControl;
+          this.matchTargetWins = data.gameConfig.matchTargetWins;
+          this.updateMatchFormatUI();
+          this.updatePlayerTimersUI();
+          
+          document.querySelectorAll('.time-btn').forEach(b => {
+            b.classList.toggle('active', parseInt(b.dataset.time, 10) === this.timeControl);
+          });
+          document.querySelectorAll('.match-btn').forEach(b => {
+            b.classList.toggle('active', parseInt(b.dataset.wins, 10) === this.matchTargetWins);
+          });
+        }
+      }
+
       if (data.resetTrigger && data.resetTrigger > (this.localResetTrigger || 0)) {
         this.localResetTrigger = data.resetTrigger;
         this.restartGame({ broadcast: false });
@@ -1291,8 +1338,8 @@ class Game {
           this.p1TimeRemaining = data.timerData.p1Time;
           this.p2TimeRemaining = data.timerData.p2Time;
           this.updatePlayerTimersUI();
-          if (this.p1TimeRemaining <= 0) this.handleTimeout(1);
-          if (this.p2TimeRemaining <= 0) this.handleTimeout(2);
+          if (this.p1TimeRemaining <= 0 && this.timeControl > 0) this.handleTimeout(1);
+          if (this.p2TimeRemaining <= 0 && this.timeControl > 0) this.handleTimeout(2);
         }
         this.updateTimerDisplay();
       }
@@ -1401,6 +1448,7 @@ class Game {
   }
   
   handleTimeout(losingPlayer) {
+    if (this.timeControl <= 0) return;
     if (this.gameOver) return;
     this.gameOver = true;
     this.pauseTimer();

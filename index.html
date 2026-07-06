@@ -321,6 +321,19 @@
     </div>
   </div>
 
+  <!-- Join Room Overlay -->
+  <div id="join-overlay" class="win-overlay hidden" role="dialog" aria-live="polite">
+    <div class="win-card" style="padding: 3rem; max-width: 400px; width: 90%;">
+      <h2 style="margin-bottom: 1rem; color: var(--text-color);">Join Game</h2>
+      <p style="color: var(--text-muted); margin-bottom: 1.5rem;">You've been invited to play! Enter your name to join the room.</p>
+      <div class="input-group">
+        <label for="join-name-input">Your Name</label>
+        <input type="text" id="join-name-input" placeholder="Guest (Yellow)" maxlength="15" autocomplete="off">
+      </div>
+      <button id="join-room-btn" class="action-btn" style="margin-top: 1rem; width: 100%;">Join Room</button>
+    </div>
+  </div>
+
   <!-- Win Celebration Overlay -->
   <div id="win-overlay" class="win-overlay hidden" role="status" aria-live="polite">
     <div class="win-card">
