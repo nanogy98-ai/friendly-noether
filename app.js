@@ -281,8 +281,7 @@ class Game {
     const joinRoomId = urlParams.get('join');
     if (joinRoomId) {
       setTimeout(() => {
-        this.switchMode('online');
-        this.connectToPeer(joinRoomId);
+        this.switchMode('online', joinRoomId);
       }, 750);
     }
     this.updateHintButtonState();
@@ -505,7 +504,11 @@ class Game {
     // Drawer Name Inputs
     this.inputP1Name.addEventListener('input', (e) => {
       const val = e.target.value.trim() || "Red Player";
-      this.p1NameText.textContent = val;
+      if (this.gameMode === 'online' && !this.isOnlineHost) {
+        this.p2NameText.textContent = val;
+      } else {
+        this.p1NameText.textContent = val;
+      }
       this.updateAllTimeScoreUI();
       this.saveActiveGameState();
       if (this.gameMode === 'online' && this.peerConn) {
@@ -1165,9 +1168,6 @@ class Game {
       this.peerStatus.textContent = "Connected";
       this.peerStatus.className = "status-badge connected";
       this.sounds.playClick();
-      
-      // Sync names
-      conn.send({ type: 'init', name: this.p1NameText.textContent });
     });
     
     this.peer.on('error', (err) => {
@@ -1192,14 +1192,15 @@ class Game {
       // Close settings drawer on connection
       this.settingsDrawer.classList.add('hidden');
       
-      // Send name
-      conn.send({ type: 'init', name: this.p1NameText.textContent });
-      
       // Joiner setup names
       if (!this.isOnlineHost) {
         this.p2NameText.textContent = this.inputP1Name.value.trim() || 'Guest (Yellow)';
         this.p1NameText.textContent = 'Host (Red)';
       }
+      
+      // Send name
+      const myName = this.isOnlineHost ? this.p1NameText.textContent : this.p2NameText.textContent;
+      conn.send({ type: 'init', name: myName });
       this.updateAllTimeScoreUI();
       this.restartGame();
     });
