@@ -1939,7 +1939,15 @@ class Game {
     const stored = localStorage.getItem('connect4_scores');
     if (stored) {
       try {
-        this.scores = JSON.parse(stored);
+        const parsed = JSON.parse(stored);
+        if (parsed && parsed.scores) {
+          this.scores = parsed.scores;
+          if (parsed.matchTargetWins !== undefined) {
+            this.matchTargetWins = parsed.matchTargetWins;
+          }
+        } else {
+          this.scores = parsed;
+        }
       } catch (e) {
         console.error("Failed to load scores", e);
       }

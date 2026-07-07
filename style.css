@@ -105,7 +105,7 @@ body {
   display: grid;
   grid-template-columns: 220px 1fr 220px;
   gap: 50px;
-  align-items: start;
+  align-items: center;
   flex-grow: 1;
 }
 
@@ -1425,13 +1425,13 @@ body {
 .game-main-layout {
   grid-template-columns: 230px minmax(520px, 1fr) 230px;
   gap: clamp(28px, 4vw, 56px);
-  align-items: start;
+  align-items: center;
 }
 
 .side-panel {
   gap: 18px;
   min-height: calc(var(--cell-size) * var(--board-rows));
-  justify-content: flex-start;
+  justify-content: center;
   position: relative;
 }
 
@@ -1708,35 +1708,42 @@ body {
   color: rgba(244, 248, 255, 0.92);
 }
 
+.red-player-card,
 .yellow-player-card {
   justify-content: flex-start;
   padding-top: 34px;
   padding-bottom: 188px;
 }
 
+.red-player-card .avatar-container,
 .yellow-player-card .avatar-container {
   width: 88px;
   height: 88px;
   margin-bottom: 10px;
 }
 
+.red-player-card .avatar-initial,
 .yellow-player-card .avatar-initial {
   font-size: 42px;
 }
 
+.red-player-card h2,
 .yellow-player-card h2 {
   font-size: 20px;
 }
 
+.red-player-card .score-divider,
 .yellow-player-card .score-divider {
   margin: 8px 0 14px;
 }
 
+.red-player-card .score-display,
 .yellow-player-card .score-display {
   gap: 6px;
   margin-bottom: 16px;
 }
 
+.red-player-card .score-num,
 .yellow-player-card .score-num {
   font-size: 52px;
 }
@@ -1777,40 +1784,7 @@ body {
   padding: 3px 0;
 }
 
-@media (min-width: 601px) {
-  .red-player-card:has(.coach-panel:not(.hidden)) {
-    justify-content: flex-start;
-    padding-top: 24px;
-    padding-bottom: 188px;
-  }
 
-  .red-player-card:has(.coach-panel:not(.hidden)) .avatar-container {
-    width: 88px;
-    height: 88px;
-    margin-bottom: 10px;
-  }
-
-  .red-player-card:has(.coach-panel:not(.hidden)) .avatar-initial {
-    font-size: 42px;
-  }
-
-  .red-player-card:has(.coach-panel:not(.hidden)) h2 {
-    font-size: 20px;
-  }
-
-  .red-player-card:has(.coach-panel:not(.hidden)) .score-divider {
-    margin: 8px 0 14px;
-  }
-
-  .red-player-card:has(.coach-panel:not(.hidden)) .score-display {
-    gap: 6px;
-    margin-bottom: 16px;
-  }
-
-  .red-player-card:has(.coach-panel:not(.hidden)) .score-num {
-    font-size: 52px;
-  }
-}
 
 @media (min-width: 1101px) {
   .bottom-bar {
