@@ -1734,6 +1734,48 @@ class Game {
   
   // ================= COMPUTER STRATEGY =================
   
+  getBoardHash(board) {
+    let hash = "";
+    for (let r = 0; r < 6; r++) {
+      for (let c = 0; c < 7; c++) {
+        hash += board[r][c];
+      }
+    }
+    return hash;
+  }
+
+  orderMoves(board, validMoves, player) {
+    const opponent = player === 1 ? 2 : 1;
+    const movesWithScores = validMoves.map(col => {
+      let score = 0;
+      const row = this.getNextOpenRow(board, col);
+      
+      // Check if this move wins for current player
+      board[row][col] = player;
+      const winSelf = this.checkWinCondition(board);
+      board[row][col] = 0;
+      if (winSelf && winSelf.player === player) {
+        score += 100000;
+      }
+      
+      // Check if this move blocks opponent's win
+      board[row][col] = opponent;
+      const winOpp = this.checkWinCondition(board);
+      board[row][col] = 0;
+      if (winOpp && winOpp.player === opponent) {
+        score += 50000;
+      }
+      
+      // Center column preference
+      score -= Math.abs(col - 3) * 10;
+      
+      return { col, score };
+    });
+    
+    movesWithScores.sort((a, b) => b.score - a.score);
+    return movesWithScores.map(x => x.col);
+  }
+
   getBestMoveForPlayer(player) {
     const validMoves = this.getValidMoves(this.board);
     if (validMoves.length === 0) return null;
@@ -1742,15 +1784,18 @@ class Game {
       return validMoves[Math.floor(Math.random() * validMoves.length)];
     }
     
+    this.transpositionTable = new Map();
+    
     let depth = 5;
     if (this.difficulty === 'medium') depth = 3;
-    if (this.difficulty === 'expert') depth = 7;
-    validMoves.sort((a, b) => Math.abs(a - 3) - Math.abs(b - 3));
+    if (this.difficulty === 'expert') depth = 12;
+    
+    const orderedMoves = this.orderMoves(this.board, validMoves, player);
     
     let bestScore = player === 2 ? -Infinity : Infinity;
     let bestMoves = [];
     
-    for (let col of validMoves) {
+    for (let col of orderedMoves) {
       const row = this.getNextOpenRow(this.board, col);
       this.board[row][col] = player;
       
@@ -1780,6 +1825,23 @@ class Game {
   }
   
   minimax(board, depth, alpha, beta, isMaximizing) {
+    const hash = this.getBoardHash(board);
+    const entry = this.transpositionTable.get(hash);
+    
+    const TT_EXACT = 0;
+    const TT_ALPHA = 1;
+    const TT_BETA = 2;
+    
+    if (entry && entry.depth >= depth) {
+      if (entry.flag === TT_EXACT) {
+        return entry.score;
+      } else if (entry.flag === TT_ALPHA && entry.score <= alpha) {
+        return entry.score;
+      } else if (entry.flag === TT_BETA && entry.score >= beta) {
+        return entry.score;
+      }
+    }
+    
     const winInfo = this.checkWinCondition(board);
     if (winInfo) {
       if (winInfo.player === 2) return 1000000 + depth;
@@ -1791,11 +1853,13 @@ class Game {
       return this.evaluateBoard(board);
     }
     
-    validMoves.sort((a, b) => Math.abs(a - 3) - Math.abs(b - 3));
+    const alphaOrig = alpha;
+    const activePlayer = isMaximizing ? 2 : 1;
+    const orderedMoves = this.orderMoves(board, validMoves, activePlayer);
     
     if (isMaximizing) {
       let maxEval = -Infinity;
-      for (let col of validMoves) {
+      for (let col of orderedMoves) {
         const row = this.getNextOpenRow(board, col);
         board[row][col] = 2;
         const evaluation = this.minimax(board, depth - 1, alpha, beta, false);
@@ -1804,10 +1868,16 @@ class Game {
         alpha = Math.max(alpha, evaluation);
         if (beta <= alpha) break;
       }
+      
+      let flag = TT_EXACT;
+      if (maxEval <= alphaOrig) flag = TT_ALPHA;
+      else if (maxEval >= beta) flag = TT_BETA;
+      this.transpositionTable.set(hash, { score: maxEval, depth, flag });
+      
       return maxEval;
     } else {
       let minEval = Infinity;
-      for (let col of validMoves) {
+      for (let col of orderedMoves) {
         const row = this.getNextOpenRow(board, col);
         board[row][col] = 1;
         const evaluation = this.minimax(board, depth - 1, alpha, beta, true);
@@ -1816,6 +1886,12 @@ class Game {
         beta = Math.min(beta, evaluation);
         if (beta <= alpha) break;
       }
+      
+      let flag = TT_EXACT;
+      if (minEval <= alphaOrig) flag = TT_ALPHA;
+      else if (minEval >= beta) flag = TT_BETA;
+      this.transpositionTable.set(hash, { score: minEval, depth, flag });
+      
       return minEval;
     }
   }
@@ -2044,6 +2120,7 @@ class Game {
   evaluateMoveForCoach(boardState, player, chosenCol) {
     if (!this.coachPanel || !this.coachEnabled) return;
     
+    this.transpositionTable = new Map();
     this.coachPanel.classList.remove('hidden');
     this.coachMessage.textContent = "Analyzing...";
     this.coachIcon.textContent = "◇";
