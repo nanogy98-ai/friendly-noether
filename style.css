@@ -276,6 +276,12 @@ body {
   border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
+.move-eval.forced-loss {
+  background: rgba(147, 51, 234, 0.15);
+  color: #c084fc;
+  border: 1px solid rgba(147, 51, 234, 0.3);
+}
+
 /* Coach Icon Glows */
 .coach-icon.best { color: #00e673 !important; text-shadow: 0 0 10px rgba(0, 230, 115, 0.6); }
 .coach-icon.good { color: #60a5fa !important; text-shadow: 0 0 10px rgba(59, 130, 246, 0.6); }
@@ -283,6 +289,7 @@ body {
 .coach-icon.forced { color: #d1d5db !important; text-shadow: 0 0 10px rgba(156, 163, 175, 0.6); }
 .coach-icon.inaccuracy { color: #fbbf24 !important; text-shadow: 0 0 10px rgba(251, 191, 36, 0.6); }
 .coach-icon.blunder { color: #f87171 !important; text-shadow: 0 0 10px rgba(239, 68, 68, 0.6); }
+.coach-icon.forced-loss { color: #c084fc !important; text-shadow: 0 0 10px rgba(168, 85, 247, 0.6); }
 
 .avatar-container {
   width: 90px;

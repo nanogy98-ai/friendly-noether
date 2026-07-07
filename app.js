@@ -2256,7 +2256,19 @@ class Game {
     let styleClass = "";
     let msg = "";
     
-    if (playerWonNow) {
+    const isForcedLoss = (player === 1 && bestScore >= 900000) || (player === 2 && bestScore <= -900000);
+    
+    if (isForcedLoss) {
+      icon = "🏳️";
+      styleClass = "forced-loss";
+      const bestCol = bestMoves[0];
+      if (bestMoves.includes(chosenCol)) {
+        msg = `Lost Position. Your opponent has a forced win, but column ${String.fromCharCode(65 + chosenCol)} offers the best resistance.`;
+      } else {
+        msg = `Lost Position. The game is lost. Column ${String.fromCharCode(65 + bestCol)} would have resisted longer than column ${String.fromCharCode(65 + chosenCol)}.`;
+      }
+    }
+    else if (playerWonNow) {
       icon = "🌟";
       styleClass = "best";
       msg = "Brilliant! You found the winning sequence.";
