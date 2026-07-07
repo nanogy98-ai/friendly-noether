@@ -2117,6 +2117,38 @@ class Game {
     }
   }
 
+  getWinningMovesCount(board, player) {
+    let count = 0;
+    const validMoves = this.getValidMoves(board);
+    for (let col of validMoves) {
+      const row = this.getNextOpenRow(board, col);
+      if (row === -1) continue;
+      board[row][col] = player;
+      const win = this.checkWinCondition(board);
+      board[row][col] = 0;
+      if (win && win.player === player) {
+        count++;
+      }
+    }
+    return count;
+  }
+
+  getDoubleThreatColumns(board, player) {
+    const list = [];
+    const validMoves = this.getValidMoves(board);
+    for (let col of validMoves) {
+      const row = this.getNextOpenRow(board, col);
+      if (row === -1) continue;
+      board[row][col] = player;
+      const count = this.getWinningMovesCount(board, player);
+      board[row][col] = 0;
+      if (count >= 2) {
+        list.push(col);
+      }
+    }
+    return list;
+  }
+
   evaluateMoveForCoach(boardState, player, chosenCol) {
     if (!this.coachPanel || !this.coachEnabled) return;
     
@@ -2124,14 +2156,34 @@ class Game {
     this.coachPanel.classList.remove('hidden');
     this.coachMessage.textContent = "Analyzing...";
     this.coachIcon.textContent = "◇";
+    this.coachIcon.className = "coach-icon";
     
     const opponent = player === 1 ? 2 : 1;
-    
-    // 1. Did the player have an immediate winning move available?
-    let playerWinningCol = -1;
     const validMoves = this.getValidMoves(boardState);
     if (validMoves.length === 0) return;
     
+    // --- 1. Detect Forced Moves ---
+    if (validMoves.length === 1) {
+      this.coachIcon.textContent = "🔒";
+      this.coachIcon.className = "coach-icon forced";
+      this.coachMessage.textContent = "Forced Move. You had no other legal moves available.";
+      
+      const moveId = player === 1 ? this.moveCount : this.moveCount - 1;
+      const entry = document.getElementById(`move-${moveId}`);
+      if (entry) {
+        const targetSpan = entry.querySelector(player === 1 ? '.move-p1' : '.move-p2');
+        if (targetSpan && !targetSpan.querySelector('.move-eval')) {
+          const evalSpan = document.createElement('span');
+          evalSpan.className = 'move-eval forced';
+          evalSpan.textContent = "🔒";
+          targetSpan.appendChild(evalSpan);
+        }
+      }
+      return;
+    }
+    
+    // --- 2. Pre-move state evaluation ---
+    let playerWinningCol = -1;
     for (let col of validMoves) {
       const row = this.getNextOpenRow(boardState, col);
       boardState[row][col] = player;
@@ -2139,7 +2191,6 @@ class Game {
       boardState[row][col] = 0;
     }
     
-    // 2. Did the opponent have an immediate winning move available (that we needed to block)?
     let opponentWinningCol = -1;
     for (let col of validMoves) {
       const row = this.getNextOpenRow(boardState, col);
@@ -2148,15 +2199,16 @@ class Game {
       boardState[row][col] = 0;
     }
     
-    // 3. What does Minimax think are the best moves?
+    const oppDoubleThreatsBefore = this.getDoubleThreatColumns(boardState, opponent);
+    
+    // --- 3. Compute Minimax scores for all options ---
     let depth = 5;
     if (this.difficulty === 'medium') depth = 3;
-    if (this.difficulty === 'expert') depth = 7;
-    let bestScore = player === 2 ? -Infinity : Infinity;
-    let bestMoves = [];
+    if (this.difficulty === 'expert') depth = 12;
     
-    // Sort to prioritize center column in case of score ties
-    validMoves.sort((a, b) => Math.abs(a - 3) - Math.abs(b - 3));
+    const moveScores = {};
+    let bestScore = player === 2 ? -Infinity : Infinity;
+    const bestMoves = [];
     
     for (let col of validMoves) {
       const row = this.getNextOpenRow(boardState, col);
@@ -2165,84 +2217,126 @@ class Game {
       const score = this.minimax(boardState, depth - 1, -Infinity, Infinity, nextIsMaximizing);
       boardState[row][col] = 0;
       
+      moveScores[col] = score;
       if (player === 2) {
-        if (score > bestScore) { bestScore = score; bestMoves = [col]; }
-        else if (score === bestScore) { bestMoves.push(col); }
+        if (score > bestScore) { bestScore = score; }
       } else {
-        if (score < bestScore) { bestScore = score; bestMoves = [col]; }
-        else if (score === bestScore) { bestMoves.push(col); }
+        if (score < bestScore) { bestScore = score; }
       }
     }
     
-    let icon = "";
-    let msg = "";
+    for (let col of validMoves) {
+      if (moveScores[col] === bestScore) {
+        bestMoves.push(col);
+      }
+    }
     
-    // 4. Evaluate the actual move made
+    // --- 4. Evaluate actual move post-state ---
     const testBoard = JSON.parse(JSON.stringify(boardState));
     const testRow = this.getNextOpenRow(testBoard, chosenCol);
     testBoard[testRow][chosenCol] = player;
+    
     const playerWonNow = this.checkWinCondition(testBoard);
+    const playerWinsCountAfter = this.getWinningMovesCount(testBoard, player);
+    const oppDoubleThreatsAfter = this.getDoubleThreatColumns(testBoard, opponent);
+    
+    let gaveOpponentWinCol = -1;
+    const oppValidMoves = this.getValidMoves(testBoard);
+    for (let oppCol of oppValidMoves) {
+      const oppRow = this.getNextOpenRow(testBoard, oppCol);
+      if (oppRow === -1) continue;
+      testBoard[oppRow][oppCol] = opponent;
+      if (this.checkWinCondition(testBoard)) {
+        gaveOpponentWinCol = oppCol;
+      }
+      testBoard[oppRow][oppCol] = 0;
+    }
+    
+    let icon = "";
+    let styleClass = "";
+    let msg = "";
     
     if (playerWonNow) {
       icon = "🌟";
+      styleClass = "best";
       msg = "Brilliant! You found the winning sequence.";
     } 
     else if (playerWinningCol !== -1 && chosenCol !== playerWinningCol) {
       icon = "❌";
+      styleClass = "blunder";
       msg = `Blunder! You missed a guaranteed win in column ${String.fromCharCode(65 + playerWinningCol)}!`;
     }
     else if (opponentWinningCol !== -1 && chosenCol !== opponentWinningCol) {
       icon = "❌";
+      styleClass = "blunder";
       msg = `Blunder! You failed to block the opponent's winning threat in column ${String.fromCharCode(65 + opponentWinningCol)}!`;
     }
+    else if (gaveOpponentWinCol !== -1) {
+      icon = "❌";
+      styleClass = "blunder";
+      msg = `Blunder! Playing in column ${String.fromCharCode(65 + chosenCol)} allows your opponent to win immediately by playing in column ${String.fromCharCode(65 + gaveOpponentWinCol)}.`;
+    }
+    else if (playerWinsCountAfter >= 2) {
+      icon = "🌟";
+      styleClass = "best";
+      msg = `Brilliant! Your move in column ${String.fromCharCode(65 + chosenCol)} establishes a double-threat win trap!`;
+    }
+    else if (oppDoubleThreatsBefore.includes(chosenCol)) {
+      icon = "🛡️";
+      styleClass = "defense";
+      msg = `Preventative Defense! You blocked your opponent from setting up a double-threat trap in column ${String.fromCharCode(65 + chosenCol)}.`;
+    }
+    else if (oppDoubleThreatsAfter.length > 0) {
+      icon = "❌";
+      styleClass = "blunder";
+      msg = `Blunder! This move allows your opponent to set up a double-threat win trap in column ${String.fromCharCode(65 + oppDoubleThreatsAfter[0])}.`;
+    }
+    else if (bestMoves.includes(chosenCol)) {
+      icon = "⭐";
+      styleClass = "best";
+      msg = "Best Move! You found the optimal continuation.";
+    }
     else {
-      // Check if chosen move creates an immediate loss
-      let gaveOpponentWinCol = -1;
-      const oppValidMoves = this.getValidMoves(testBoard);
-      for (let oppCol of oppValidMoves) {
-        const oppRow = this.getNextOpenRow(testBoard, oppCol);
-        if (oppRow === -1) continue;
-        testBoard[oppRow][oppCol] = opponent;
-        if (this.checkWinCondition(testBoard)) {
-          gaveOpponentWinCol = oppCol;
-        }
-        testBoard[oppRow][oppCol] = 0;
+      // Numerical evaluation drop check
+      const scoreDiff = Math.abs(moveScores[chosenCol] - bestScore);
+      const bestCol = bestMoves[0];
+      
+      const preStats = this.getBoardStats(boardState, player);
+      const bestRow = this.getNextOpenRow(boardState, bestCol);
+      boardState[bestRow][bestCol] = player;
+      const postStats = this.getBoardStats(boardState, player);
+      boardState[bestRow][bestCol] = 0;
+      
+      let reason = "";
+      if (postStats.opp3 < preStats.opp3) {
+        reason = `it blocks your opponent from setting up a 3-in-a-row threat.`;
+      } else if (postStats.my3 > preStats.my3) {
+        reason = `it creates a dangerous 3-in-a-row threat.`;
+      } else if (postStats.my2 > preStats.my2) {
+        reason = `it connects your pieces together to build future threats.`;
+      } else if (Math.abs(bestCol - 3) < Math.abs(chosenCol - 3)) {
+        reason = `it controls the center of the board more effectively.`;
+      } else {
+        reason = `it gives you more options for connecting pieces on future turns.`;
       }
       
-      if (gaveOpponentWinCol !== -1) {
-        icon = "❌";
-        msg = `Blunder! This allows your opponent to win immediately by playing in column ${String.fromCharCode(65 + gaveOpponentWinCol)}.`;
-      }
-      else if (bestMoves.includes(chosenCol)) {
-        icon = "⭐";
-        msg = "Best Move! You found the optimal continuation.";
-      }
-      else {
-        // It's an inaccuracy.
-        const bestCol = bestMoves[0];
+      if (scoreDiff <= 20) {
+        icon = "✔️";
+        styleClass = "good";
+        msg = `Good Move! Column ${String.fromCharCode(65 + chosenCol)} is a solid continuation. Column ${String.fromCharCode(65 + bestCol)} was also strong.`;
+      } else if (scoreDiff <= 100) {
         icon = "❓";
-        
-        const preStats = this.getBoardStats(boardState, player);
-        const bestRow = this.getNextOpenRow(boardState, bestCol);
-        boardState[bestRow][bestCol] = player;
-        const postStats = this.getBoardStats(boardState, player);
-        boardState[bestRow][bestCol] = 0;
-        
-        if (postStats.opp3 < preStats.opp3) {
-          msg = `Inaccuracy. Column ${String.fromCharCode(65 + bestCol)} was better because it blocks your opponent from setting up a 3-in-a-row threat.`;
-        } else if (postStats.my3 > preStats.my3) {
-          msg = `Inaccuracy. Column ${String.fromCharCode(65 + bestCol)} was better because it creates a dangerous 3-in-a-row threat.`;
-        } else if (postStats.my2 > preStats.my2) {
-          msg = `Inaccuracy. Column ${String.fromCharCode(65 + bestCol)} was better because it connects your pieces together to build future threats.`;
-        } else if (Math.abs(bestCol - 3) < Math.abs(chosenCol - 3)) {
-          msg = `Inaccuracy. Column ${String.fromCharCode(65 + bestCol)} was better because it controls the center of the board more effectively.`;
-        } else {
-          msg = `Inaccuracy. Column ${String.fromCharCode(65 + bestCol)} gives you more options for connecting pieces on future turns.`;
-        }
+        styleClass = "inaccuracy";
+        msg = `Inaccuracy! Column ${String.fromCharCode(65 + chosenCol)} is passive. Column ${String.fromCharCode(65 + bestCol)} was better because ${reason}`;
+      } else {
+        icon = "⚠️";
+        styleClass = "blunder";
+        msg = `Mistake! Column ${String.fromCharCode(65 + chosenCol)} worsens your position. Column ${String.fromCharCode(65 + bestCol)} was much better because ${reason}`;
       }
     }
     
     this.coachIcon.textContent = icon;
+    this.coachIcon.className = `coach-icon ${styleClass}`;
     this.coachMessage.textContent = msg;
     
     // Add evaluation icon to tracker list
@@ -2252,8 +2346,8 @@ class Game {
       const targetSpan = entry.querySelector(player === 1 ? '.move-p1' : '.move-p2');
       if (targetSpan && !targetSpan.querySelector('.move-eval')) {
         const evalSpan = document.createElement('span');
-        evalSpan.className = 'move-eval';
-        evalSpan.textContent = this.coachIcon.textContent;
+        evalSpan.className = `move-eval ${styleClass}`;
+        evalSpan.textContent = icon;
         targetSpan.appendChild(evalSpan);
       }
     }
