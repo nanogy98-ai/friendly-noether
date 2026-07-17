@@ -1,5 +1,8 @@
 {
+  "name": "friendly-noether-connect-four",
+  "private": true,
   "scripts": {
+    "check": "node --check app.js && node --check connect-four-engine.js && node --check ai-worker.js",
     "test": "node --test tests/game-regressions.test.mjs"
   }
 }

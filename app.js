@@ -2,10 +2,6 @@
  * Connect Four - Game Logic Engine
  */
 
-// =========================================================
-// 🔥 FIREBASE REALTIME DATABASE CONFIGURATION 🔥
-// Replace this placeholder config with your actual Firebase project config.
-// =========================================================
 const firebaseConfig = {
   apiKey: "AIzaSyAFdNRQSA2nPDGgEUnq3KwRZU0j9aK41X8",
   authDomain: "connect4-3877b.firebaseapp.com",
@@ -16,12 +12,138 @@ const firebaseConfig = {
   appId: "1:774026933685:web:b2b1d48272cdcc29ee95fc"
 };
 
-// Initialize Firebase
-if (typeof firebase !== 'undefined' && !firebase.apps.length) {
-  firebase.initializeApp(firebaseConfig);
+let db = null;
+let firebaseLoadPromise = null;
+
+function loadScriptOnce(src) {
+  const existing = document.querySelector(`script[src="${src}"]`);
+  if (existing) {
+    return existing.dataset.loaded === 'true'
+      ? Promise.resolve()
+      : new Promise((resolve, reject) => {
+          existing.addEventListener('load', resolve, { once: true });
+          existing.addEventListener('error', reject, { once: true });
+        });
+  }
+
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = src;
+    script.async = true;
+    script.addEventListener('load', () => {
+      script.dataset.loaded = 'true';
+      resolve();
+    }, { once: true });
+    script.addEventListener('error', reject, { once: true });
+    document.head.appendChild(script);
+  });
 }
-const db = typeof firebase !== 'undefined' ? firebase.database() : null;
-// =========================================================
+
+async function ensureFirebase() {
+  if (db) return db;
+  if (!firebaseLoadPromise) {
+    firebaseLoadPromise = (async () => {
+      await loadScriptOnce('https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js');
+      await loadScriptOnce('https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js');
+      if (!window.firebase.apps.length) window.firebase.initializeApp(firebaseConfig);
+      db = window.firebase.database();
+      return db;
+    })().catch((error) => {
+      firebaseLoadPromise = null;
+      throw error;
+    });
+  }
+  return firebaseLoadPromise;
+}
+
+const LEGACY_COMPUTER_NAME = ['quant', 'um ai'].join('');
+
+function sanitizePlayerName(value, fallback) {
+  const name = String(value || '').trim().replace(/\s+/g, ' ').slice(0, 20);
+  if (!name) return fallback;
+  if (name.toLowerCase() === LEGACY_COMPUTER_NAME) return fallback;
+  return name;
+}
+
+function normalizeScores(value) {
+  const safeNumber = (number) => Math.max(0, Math.floor(Number(number) || 0));
+  const normalized = {};
+  for (const mode of ['pvp', 'pve', 'online']) {
+    normalized[mode] = {
+      p1: safeNumber(value?.[mode]?.p1),
+      p2: safeNumber(value?.[mode]?.p2),
+      draws: safeNumber(value?.[mode]?.draws)
+    };
+  }
+  return normalized;
+}
+
+function normalizeAllTimeScores(value) {
+  const normalized = Object.create(null);
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return normalized;
+  for (const [rawName, rawScore] of Object.entries(value)) {
+    const name = sanitizePlayerName(rawName, 'Player');
+    normalized[name] = (normalized[name] || 0) + Math.max(0, Math.floor(Number(rawScore) || 0));
+  }
+  return normalized;
+}
+
+function createRoomId() {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+}
+
+function isValidRoomId(value) {
+  return /^[A-Za-z0-9_-]{22}$/.test(value);
+}
+
+class AIWorkerClient {
+  constructor() {
+    this.worker = null;
+    this.nextId = 1;
+    this.pending = new Map();
+  }
+
+  ensureWorker() {
+    if (this.worker || typeof Worker === 'undefined') return this.worker;
+    this.worker = new Worker('ai-worker.js?v=1');
+    this.worker.addEventListener('message', (event) => {
+      const request = this.pending.get(event.data.id);
+      if (!request) return;
+      this.pending.delete(event.data.id);
+      if (event.data.error) request.reject(new Error(event.data.error));
+      else request.resolve(event.data.result);
+    });
+    this.worker.addEventListener('error', (error) => {
+      for (const request of this.pending.values()) request.reject(error);
+      this.pending.clear();
+      this.worker?.terminate();
+      this.worker = null;
+    });
+    return this.worker;
+  }
+
+  request(type, payload) {
+    const worker = this.ensureWorker();
+    if (!worker) return Promise.reject(new Error('Web Workers are unavailable'));
+    const id = this.nextId++;
+    return new Promise((resolve, reject) => {
+      this.pending.set(id, { resolve, reject });
+      worker.postMessage({ id, type, payload });
+    });
+  }
+
+  cancelAll() {
+    for (const request of this.pending.values()) request.reject(new Error('Cancelled'));
+    this.pending.clear();
+    this.worker?.terminate();
+    this.worker = null;
+  }
+}
 
 // Sound Controller using Web Audio API
 class SoundController {
@@ -177,6 +299,7 @@ class ConfettiController {
   }
   
   start() {
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
     this.active = true;
     this.resize();
     this.particles = [];
@@ -254,6 +377,9 @@ class Game {
     this.gameOver = false;
     this.animating = false;
     this.hoveredCol = null;
+    this.lastResult = null;
+    this.gameGeneration = 0;
+    this.pendingGameTasks = new Set();
     
     
     // Firebase Online Multiplayer variables
@@ -267,6 +393,7 @@ class Game {
     // Timer
     this.timerSeconds = 0;
     this.timerInterval = null;
+    this.lastTimerTimestamp = null;
     this.timeControl = 0; // seconds
     this.p1TimeRemaining = 0;
     this.p2TimeRemaining = 0;
@@ -281,17 +408,18 @@ class Game {
     };
     
     // All-time scores database
-    this.allTimeScores = {};
+    this.allTimeScores = Object.create(null);
     
     // Controllers
     this.sounds = new SoundController();
     this.confetti = new ConfettiController('confetti-canvas');
+    this.aiWorker = new AIWorkerClient();
     
     // Initialize
     this.loadAllTimeScores();
     this.initDOM();
     
-    // Parse URL check for online P2P join request
+    // Parse a private-room invitation from the URL.
     const urlParams = new URLSearchParams(window.location.search);
     const joinRoomId = urlParams.get('join');
     
@@ -301,9 +429,9 @@ class Game {
       this.loadStats();
       this.renderScores();
       this.updateTurnUI();
-      // Show the join overlay
-      setTimeout(() => {
+      this.scheduleGameTask(() => {
         this.joinOverlay.classList.remove('hidden');
+        document.getElementById('app-shell').inert = true;
         this.joinNameInput.focus();
       }, 300);
     } else {
@@ -312,7 +440,6 @@ class Game {
         this.loadStats();
         this.renderScores();
         this.updateTurnUI();
-        this.startTimer();
       }
     }
     this.updateHintButtonState();
@@ -324,6 +451,23 @@ class Game {
     } else {
       this.hintBtn.disabled = true;
     }
+  }
+
+  scheduleGameTask(callback, delay, generation = this.gameGeneration) {
+    let task = null;
+    task = setTimeout(() => {
+      this.pendingGameTasks.delete(task);
+      if (generation === this.gameGeneration) callback();
+    }, delay);
+    this.pendingGameTasks.add(task);
+    return task;
+  }
+
+  cancelPendingGameTasks() {
+    for (const task of this.pendingGameTasks) clearTimeout(task);
+    this.pendingGameTasks.clear();
+    this.gameGeneration++;
+    this.aiWorker.cancelAll();
   }
   
   initDOM() {
@@ -354,6 +498,7 @@ class Game {
     this.undoBtn = document.getElementById('undo-btn');
     this.hintBtn = document.getElementById('hint-btn');
     this.soundBtn = document.getElementById('sound-btn');
+    this.soundToggle = document.getElementById('sound-toggle');
     this.timerDisplay = document.getElementById('game-timer');
     this.coachToggle = document.getElementById('coach-toggle');
     this.clearStats = document.getElementById('clear-stats');
@@ -363,6 +508,8 @@ class Game {
     this.settingsClose = document.getElementById('settings-close');
     this.settingsDrawer = document.getElementById('settings-drawer');
     this.drawerOverlay = this.settingsDrawer.querySelector('.drawer-overlay');
+    this.drawerContent = this.settingsDrawer.querySelector('.drawer-content');
+    this.appShell = document.getElementById('app-shell');
     
     this.modePvP = document.getElementById('mode-pvp');
     this.modePvE = document.getElementById('mode-pve');
@@ -377,11 +524,10 @@ class Game {
     this.p1MatchFormatUI = document.getElementById('p1-match-format');
     this.p2MatchFormatUI = document.getElementById('p2-match-format');
     
-    // Peer components
+    // Online room controls
     this.peerStatus = document.getElementById('peer-status');
     this.onlineShareUrl = document.getElementById('online-share-url');
     this.copyOnlineUrlBtn = document.getElementById('copy-online-url-btn');
-    this.onlineQrCode = document.getElementById('online-qr-code');
     this.inputPeerId = document.getElementById('input-peer-id');
     this.connectPeerBtn = document.getElementById('connect-peer-btn');
     this.playerRenameGroup = document.getElementById('player-rename-group');
@@ -412,6 +558,7 @@ class Game {
     this.coachIcon = document.getElementById('coach-icon');
     this.coachMessage = document.getElementById('coach-message');
     this.trackerList = document.getElementById('tracker-list');
+    this.boardAnnouncer = document.getElementById('board-announcer');
     this.moveCount = 1;
     
     // Populate board cell covers
@@ -432,8 +579,10 @@ class Game {
       col.className = 'board-column';
       col.dataset.col = c;
       col.setAttribute('aria-label', `Drop token in column ${String.fromCharCode(65 + c)}`);
+      col.setAttribute('aria-keyshortcuts', String(c + 1));
       this.columnsContainer.appendChild(col);
     }
+    this.updateColumnControls();
     
     this.bindEvents();
     this.setupTheme();
@@ -446,6 +595,7 @@ class Game {
       this.inputP2Name.value = val;
       this.p2NameText.textContent = val;
       this.joinOverlay.classList.add('hidden');
+      this.appShell.inert = false;
       this.sounds.playClick();
       
       const urlParams = new URLSearchParams(window.location.search);
@@ -507,26 +657,39 @@ class Game {
     this.modePvE.addEventListener('click', () => this.switchMode('pve'));
     this.modeOnline.addEventListener('click', () => this.switchMode('online'));
 
-    // Connect to target Peer ID
+    // Connect to a private room code.
     this.connectPeerBtn.addEventListener('click', () => {
       this.connectToPeer(this.inputPeerId.value.trim());
     });
     
 
-    // Copy WebRTC URL
-    this.copyOnlineUrlBtn.addEventListener('click', () => {
+    this.copyOnlineUrlBtn.addEventListener('click', async () => {
       this.sounds.playClick();
-      this.onlineShareUrl.select();
-      document.execCommand('copy');
-      alert("Online P2P invite link copied to clipboard!");
+      const value = this.onlineShareUrl.value;
+      if (!value) return;
+      try {
+        await navigator.clipboard.writeText(value);
+      } catch (_) {
+        this.onlineShareUrl.select();
+        document.execCommand('copy');
+      }
+      const previous = this.copyOnlineUrlBtn.textContent;
+      this.copyOnlineUrlBtn.textContent = 'Copied';
+      this.scheduleGameTask(() => {
+        this.copyOnlineUrlBtn.textContent = previous;
+      }, 1600);
     });
     
     // Difficulty selectors
     document.querySelectorAll('.diff-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
         this.sounds.playClick();
-        document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.diff-btn').forEach(b => {
+          b.classList.remove('active');
+          b.setAttribute('aria-pressed', 'false');
+        });
         e.target.classList.add('active');
+        e.target.setAttribute('aria-pressed', 'true');
         this.difficulty = e.target.dataset.diff;
         this.restartGame();
       });
@@ -536,8 +699,12 @@ class Game {
     document.querySelectorAll('.time-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
         this.sounds.playClick();
-        document.querySelectorAll('.time-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.time-btn').forEach(b => {
+          b.classList.remove('active');
+          b.setAttribute('aria-pressed', 'false');
+        });
         e.target.classList.add('active');
+        e.target.setAttribute('aria-pressed', 'true');
         this.timeControl = parseInt(e.target.dataset.time, 10);
         this.restartGame();
       });
@@ -547,8 +714,12 @@ class Game {
     document.querySelectorAll('.match-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
         this.sounds.playClick();
-        document.querySelectorAll('.match-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.match-btn').forEach(b => {
+          b.classList.remove('active');
+          b.setAttribute('aria-pressed', 'false');
+        });
         e.target.classList.add('active');
+        e.target.setAttribute('aria-pressed', 'true');
         this.matchTargetWins = parseInt(e.target.dataset.wins, 10);
         this.scores[this.gameMode] = { p1: 0, p2: 0, draws: 0 };
         this.renderScores();
@@ -559,7 +730,7 @@ class Game {
     
     // Drawer Name Inputs
     this.inputP1Name.addEventListener('input', (e) => {
-      const val = e.target.value.trim() || "Red Player";
+      const val = sanitizePlayerName(e.target.value, "Red Player");
       if (this.gameMode === 'online' && !this.isOnlineHost) {
         this.p2NameText.textContent = val;
       } else {
@@ -573,7 +744,7 @@ class Game {
     });
     
     this.inputP2Name.addEventListener('input', (e) => {
-      const val = e.target.value.trim() || "Yellow Player";
+      const val = sanitizePlayerName(e.target.value, "Yellow Player");
       this.p2NameText.textContent = val;
       this.updateAllTimeScoreUI();
       this.saveActiveGameState();
@@ -585,15 +756,16 @@ class Game {
     // Drawer open/close toggles
     this.settingsToggle.addEventListener('click', () => {
       this.sounds.playClick();
-      this.settingsDrawer.classList.remove('hidden');
+      this.openSettings();
     });
     this.settingsClose.addEventListener('click', () => {
       this.sounds.playClick();
-      this.settingsDrawer.classList.add('hidden');
+      this.closeSettings();
     });
     this.drawerOverlay.addEventListener('click', () => {
-      this.settingsDrawer.classList.add('hidden');
+      this.closeSettings();
     });
+    document.addEventListener('keydown', (event) => this.handleDialogKeydown(event));
     
     // Controls Bar Row Actions
     this.newGameBtn.addEventListener('click', () => {
@@ -610,10 +782,11 @@ class Game {
     });
     
     this.soundBtn.addEventListener('click', () => {
-      this.sounds.enabled = !this.sounds.enabled;
-      this.soundBtn.classList.toggle('sound-active', this.sounds.enabled);
-      localStorage.setItem('sound', this.sounds.enabled ? 'on' : 'off');
-      this.sounds.playClick();
+      this.setSoundEnabled(!this.sounds.enabled);
+    });
+
+    this.soundToggle.addEventListener('change', (event) => {
+      this.setSoundEnabled(event.target.checked);
     });
     
     this.coachToggle.addEventListener('change', (e) => {
@@ -621,6 +794,7 @@ class Game {
       if (!this.coachEnabled && this.coachPanel) {
         this.coachPanel.classList.add('hidden');
       }
+      localStorage.setItem('connect4_coach', this.coachEnabled ? 'on' : 'off');
     });
     
     // Clear Scorecard Stats
@@ -633,10 +807,14 @@ class Game {
     this.clearAlltimeBtn.addEventListener('click', () => {
       this.sounds.playClick();
       if (confirm("Are you sure you want to clear the entire all-time scoreboard database?")) {
-        this.allTimeScores = {};
+        this.allTimeScores = Object.create(null);
         localStorage.setItem('connect4_alltime_db', JSON.stringify({}));
         this.updateAllTimeScoreUI();
-        alert("All-Time database cleared!");
+        const previous = this.clearAlltimeBtn.textContent;
+        this.clearAlltimeBtn.textContent = 'All-time scores reset';
+        this.scheduleGameTask(() => {
+          this.clearAlltimeBtn.textContent = previous;
+        }, 1800);
       }
     });
     
@@ -651,6 +829,10 @@ class Game {
       this.sounds.enabled = true;
       this.soundBtn.classList.add('sound-active');
     }
+    this.soundToggle.checked = this.sounds.enabled;
+
+    this.coachEnabled = localStorage.getItem('connect4_coach') === 'on';
+    this.coachToggle.checked = this.coachEnabled;
     
     const themePref = localStorage.getItem('theme');
     if (themePref === 'light') {
@@ -662,6 +844,60 @@ class Game {
     }
   }
 
+  setSoundEnabled(enabled) {
+    this.sounds.enabled = Boolean(enabled);
+    this.soundToggle.checked = this.sounds.enabled;
+    this.soundBtn.classList.toggle('sound-active', this.sounds.enabled);
+    localStorage.setItem('sound', this.sounds.enabled ? 'on' : 'off');
+    if (this.sounds.enabled) this.sounds.playClick();
+  }
+
+  openSettings() {
+    this.settingsDrawer.classList.remove('hidden');
+    this.appShell.inert = true;
+    document.body.classList.add('modal-open');
+    this.drawerContent.focus();
+  }
+
+  closeSettings() {
+    if (this.settingsDrawer.classList.contains('hidden')) return;
+    this.settingsDrawer.classList.add('hidden');
+    this.appShell.inert = false;
+    document.body.classList.remove('modal-open');
+    this.settingsToggle.focus();
+  }
+
+  handleDialogKeydown(event) {
+    if (!this.settingsDrawer.classList.contains('hidden')) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        this.closeSettings();
+        return;
+      }
+      if (event.key === 'Tab') this.trapFocus(event, this.drawerContent);
+    } else if (!this.joinOverlay.classList.contains('hidden') && event.key === 'Tab') {
+      this.trapFocus(event, this.joinOverlay.querySelector('.join-card'));
+    } else if (/^[1-7]$/.test(event.key) && !['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) {
+      const col = Number(event.key) - 1;
+      if (this.canLocalPlayerAct(false)) this.handlePlayerMove(col);
+    }
+  }
+
+  trapFocus(event, container) {
+    const focusable = Array.from(container.querySelectorAll('button, input, [tabindex]:not([tabindex="-1"])'))
+      .filter((element) => !element.disabled);
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
   canLocalPlayerAct(showAlert = false) {
     if (this.gameOver || this.animating) return false;
     if (this.gameMode === 'pve' && this.activePlayer === 2) return false;
@@ -670,7 +906,7 @@ class Game {
       if (!this.roomRef) return false;
       const myRole = this.isOnlineHost ? 1 : 2;
       if (this.activePlayer !== myRole) {
-        if (showAlert) alert("It's not your turn! Please wait for your opponent.");
+        if (showAlert) this.announce("It is your opponent's turn.");
         return false;
       }
     }
@@ -682,10 +918,11 @@ class Game {
     if (this.gameMode === mode && mode !== 'online') return;
     this.sounds.playClick();
     
-    // Clean up active WebRTC connections
+    // Clean up the previous online room before changing modes.
     this.destroyFirebase();
     
     this.gameMode = mode;
+    if (mode === 'online') this.isOnlineHost = !targetId;
     this.updateHintButtonState();
     
     // Reset UI indicators
@@ -697,25 +934,34 @@ class Game {
     this.modePvP.classList.remove('active');
     this.modePvE.classList.remove('active');
     this.modeOnline.classList.remove('active');
+    [this.modePvP, this.modePvE, this.modeOnline].forEach((button) => button.setAttribute('aria-pressed', 'false'));
+
+    const p1Name = sanitizePlayerName(this.inputP1Name.value, 'Red Player');
+    const p2Name = sanitizePlayerName(this.inputP2Name.value, 'Yellow Player');
+    this.inputP1Name.value = p1Name;
+    this.inputP2Name.value = p2Name;
+    this.coachToggle.disabled = mode === 'online';
+    if (mode === 'online') this.coachPanel.classList.add('hidden');
     
     if (mode === 'pvp') {
       this.modePvP.classList.add('active');
+      this.modePvP.setAttribute('aria-pressed', 'true');
       if (this.p1NameInputGroup) this.p1NameInputGroup.classList.remove('hidden');
       this.p2NameInputGroup.classList.remove('hidden');
-      this.p1NameText.textContent = this.inputP1Name.value.trim() || 'Red Player';
-      this.p2NameText.textContent = this.inputP2Name.value.trim() || 'Yellow Player';
+      this.p1NameText.textContent = p1Name;
+      this.p2NameText.textContent = p2Name;
     } else if (mode === 'pve') {
       this.modePvE.classList.add('active');
+      this.modePvE.setAttribute('aria-pressed', 'true');
       this.difficultyGroup.classList.remove('hidden');
       if (this.p1NameInputGroup) this.p1NameInputGroup.classList.remove('hidden');
       this.p2NameInputGroup.classList.add('hidden');
-      this.p1NameText.textContent = this.inputP1Name.value.trim() || 'Red Player';
+      this.p1NameText.textContent = p1Name;
       this.p2NameText.textContent = 'Computer';
     } else if (mode === 'online') {
       this.modeOnline.classList.add('active');
+      this.modeOnline.setAttribute('aria-pressed', 'true');
       this.onlineConfigGroup.classList.remove('hidden');
-      // Create or join the Firebase room immediately
-      this.initFirebase(targetId);
       if (this.isOnlineHost) {
         if (this.p1NameInputGroup) this.p1NameInputGroup.classList.remove('hidden');
         this.p2NameInputGroup.classList.add('hidden');
@@ -729,12 +975,13 @@ class Game {
     this.renderScores();
     // Always clear the board when switching modes
     this.restartGame({ broadcast: false });
+    if (mode === 'online') void this.initFirebase(targetId);
   }
 
   editPlayerNameInline(player) {
     if (this.gameMode === 'pve' && player === 2) return; 
     if (this.gameMode === 'online') {
-      // Direct peer: only allow renaming your own slot (P1 on Host is Red, P1 on Joiner is Yellow)
+      // Online rooms only allow each player to rename their own slot.
       const myRole = this.isOnlineHost ? 1 : 2;
       if (player !== myRole) return;
     }
@@ -746,6 +993,7 @@ class Game {
     input.type = 'text';
     input.className = 'name-edit-input';
     input.value = oldName;
+    input.maxLength = 20;
     
     textSpan.innerHTML = '';
     textSpan.appendChild(input);
@@ -753,7 +1001,7 @@ class Game {
     input.select();
     
     const saveName = () => {
-      const newName = input.value.trim() || (player === 1 ? "Red Player" : "Yellow Player");
+      const newName = sanitizePlayerName(input.value, player === 1 ? "Red Player" : "Yellow Player");
       textSpan.textContent = newName;
       
       // Update settings inputs
@@ -815,12 +1063,11 @@ class Game {
     const row = this.getNextOpenRow(this.board, col);
     if (row === -1) return; 
     
-    // Coach evaluation (async so it doesn't block move drop)
     const boardClone = JSON.parse(JSON.stringify(this.board));
     const player = this.activePlayer;
-    setTimeout(() => {
-      this.evaluateMoveForCoach(boardClone, player, col);
-    }, 500);
+    if (this.coachEnabled && this.gameMode !== 'online') {
+      this.scheduleGameTask(() => void this.evaluateMoveForCoach(boardClone, player, col), 500);
+    }
     
     if (this.gameMode === 'online') {
       if (this.roomRef) {
@@ -840,6 +1087,7 @@ class Game {
   }
   
   makeMove(row, col, broadcast = true) {
+    if (this.gameOver || row < 0 || this.board[row][col] !== 0) return;
     if (this.moveHistory.length === 0 && (this.gameMode !== 'online' || this.isOnlineHost)) {
       this.startTimer();
     } else if (this.moveHistory.length === 0 && this.gameMode === 'online' && !this.isOnlineHost && broadcast) {
@@ -851,6 +1099,7 @@ class Game {
     
     const colLetter = String.fromCharCode(65 + col);
     this.updateMoveTracker(colLetter, this.activePlayer);
+    this.announce(`${this.activePlayer === 1 ? this.p1NameText.textContent : this.p2NameText.textContent} played column ${colLetter}.`);
     
     this.sounds.playDrop(row);
     
@@ -864,7 +1113,7 @@ class Game {
     this.tokensContainer.appendChild(token);
     
     this.animating = true;
-    setTimeout(() => {
+    this.scheduleGameTask(() => {
       token.style.transform = `translateY(calc(${row} * var(--cell-size) + (var(--cell-size) - var(--token-size)) / 2))`;
     }, 15);
     
@@ -875,13 +1124,14 @@ class Game {
       this.saveActiveGameState();
     }
     
-    setTimeout(() => {
+    this.scheduleGameTask(() => {
       this.animating = false;
       this.checkGameStatus();
     }, 450);
   }
   
   checkGameStatus() {
+    if (this.gameOver) return;
     const winInfo = this.checkWinCondition(this.board);
     
     if (winInfo) {
@@ -895,16 +1145,8 @@ class Game {
       const p2Name = this.p2NameText.textContent;
       
       const modeStats = this.scores[this.gameMode];
-      let winnerName = "";
-      if (winInfo.player === 1) {
-        modeStats.p1++;
-        winnerName = p1Name;
-        this.allTimeScores[p1Name] = (this.allTimeScores[p1Name] || 0) + 1;
-      } else {
-        modeStats.p2++;
-        winnerName = p2Name;
-        this.allTimeScores[p2Name] = (this.allTimeScores[p2Name] || 0) + 1;
-      }
+      const winnerName = winInfo.player === 1 ? p1Name : p2Name;
+      this.awardResult('win', winInfo.player, winnerName);
       
       this.saveStats();
       this.saveAllTimeScores();
@@ -913,7 +1155,9 @@ class Game {
       this.updateAllTimeScoreUI();
       
       this.turnText.textContent = `${winnerName} Wins!`;
+      this.announce(`${winnerName} wins the game.`);
       this.turnColorIndicator.className = `turn-color-indicator ${winInfo.player === 1 ? 'red' : 'yellow'}`;
+      this.updateColumnControls();
       
       const numMoves = this.moveHistory.length;
       const isMatchWin = this.matchTargetWins > 0 && (modeStats.p1 >= this.matchTargetWins || modeStats.p2 >= this.matchTargetWins);
@@ -924,9 +1168,9 @@ class Game {
         : `Achieved a brilliant victory in ${numMoves} total moves.`;
       this.winEmoji.textContent = isMatchWin ? '🏆' : (winInfo.player === 1 ? 'R' : 'Y');
       
-      setTimeout(() => {
+      this.scheduleGameTask(() => {
         this.winOverlay.classList.remove('hidden');
-        setTimeout(() => {
+        this.scheduleGameTask(() => {
           this.winOverlay.classList.add('hidden');
           this.confetti.stop();
         }, 3500);
@@ -952,9 +1196,11 @@ class Game {
 
     this.animating = true;
     this.turnText.textContent = "Computer is thinking...";
-    
-    setTimeout(() => {
-      const computerCol = this.getBestMoveForPlayer(2);
+
+    const generation = this.gameGeneration;
+    this.scheduleGameTask(async () => {
+      const computerCol = await this.getBestMoveAsync(this.board, 2);
+      if (generation !== this.gameGeneration || this.gameOver || this.activePlayer !== 2) return;
       if (computerCol !== null) {
         const computerRow = this.getNextOpenRow(this.board, computerCol);
         this.animating = false;
@@ -963,7 +1209,7 @@ class Game {
         this.animating = false;
         this.handleDraw();
       }
-    }, 600);
+    }, 320, generation);
   }
 
   handleDraw() {
@@ -972,37 +1218,43 @@ class Game {
     this.gameOver = true;
     this.animating = false;
     this.pauseTimer();
-    this.scores[this.gameMode].draws++;
+    this.awardResult('draw', null, null);
     this.saveStats();
     this.saveActiveGameState();
     this.renderScores();
 
     this.turnText.textContent = "It's a Draw!";
+    this.announce('The game is a draw.');
     this.turnColorIndicator.className = 'turn-color-indicator';
     this.p1Card.classList.remove('active');
     this.p2Card.classList.remove('active');
+    this.updateColumnControls();
 
     this.winTitle.textContent = "Match Draw!";
     this.winSubtitle.textContent = "A perfect defensive grid from both sides.";
-    this.winEmoji.textContent = '🤝';
+    this.winEmoji.textContent = '=';
 
-    setTimeout(() => {
+    this.scheduleGameTask(() => {
       this.winOverlay.classList.remove('hidden');
-      setTimeout(() => {
+      this.scheduleGameTask(() => {
         this.winOverlay.classList.add('hidden');
       }, 3500);
     }, 750);
   }
   
-  showHint() {
+  async showHint() {
     if (this.gameOver || this.animating) return;
-    
-    const bestCol = this.getBestMoveForPlayer(this.activePlayer);
+    const generation = this.gameGeneration;
+    this.hintBtn.disabled = true;
+    const bestCol = await this.getBestMoveAsync(this.board, this.activePlayer);
+    this.updateHintButtonState();
+    if (generation !== this.gameGeneration || this.gameOver) return;
     if (bestCol !== null) {
       const arrow = document.querySelector(`.col-arrow[data-col="${bestCol}"]`);
       if (arrow) {
         arrow.classList.add('hint-glow');
-        setTimeout(() => {
+        this.announce(`Hint: consider column ${String.fromCharCode(65 + bestCol)}.`);
+        this.scheduleGameTask(() => {
           arrow.classList.remove('hint-glow');
         }, 2000);
       }
@@ -1010,7 +1262,11 @@ class Game {
   }
   
   undoMove() {
-    if (this.gameMode === 'online' || this.moveHistory.length === 0 || this.animating) return;
+    const canInterruptComputer = this.gameMode === 'pve' && this.activePlayer === 2;
+    if (this.gameMode === 'online' || this.moveHistory.length === 0 || (this.animating && !canInterruptComputer)) return;
+
+    this.cancelPendingGameTasks();
+    this.rollbackLastResult();
     
     this.winOverlay.classList.add('hidden');
     this.confetti.stop();
@@ -1038,6 +1294,8 @@ class Game {
     }
     
     this.gameOver = false;
+    this.animating = false;
+    this.lastResult = null;
     document.querySelectorAll('.token').forEach(t => t.classList.remove('winning-token'));
     
     this.updateTurnUI();
@@ -1060,6 +1318,9 @@ class Game {
   restartGame(options = {}) {
     const shouldBroadcast = options.broadcast !== false;
 
+    this.cancelPendingGameTasks();
+    this.pauseTimer();
+
     if (this.matchTargetWins > 0) {
       const p1Score = this.scores[this.gameMode].p1;
       const p2Score = this.scores[this.gameMode].p2;
@@ -1068,9 +1329,9 @@ class Game {
         this.renderScores();
         this.saveStats();
       }
-      this.newGameBtn.innerHTML = "<span class=\"icon\">+</span> Next Game";
+      this.setNewGameButtonLabel('Next Game');
     } else {
-      this.newGameBtn.innerHTML = "<span class=\"icon\">+</span> New Game";
+      this.setNewGameButtonLabel('New Game');
     }
 
     this.board = Array(this.rows).fill(null).map(() => Array(this.cols).fill(0));
@@ -1078,6 +1339,7 @@ class Game {
     this.gameOver = false;
     this.animating = false;
     this.activePlayer = 1;
+    this.lastResult = null;
 
     this.tokensContainer.innerHTML = '';
     this.previewRow.innerHTML = '';
@@ -1091,8 +1353,8 @@ class Game {
     this.updatePlayerTimersUI();
 
     this.updateTurnUI();
-    this.pauseTimer();
     this.timerSeconds = 0;
+    this.lastTimerTimestamp = null;
     this.updateTimerDisplay();
 
     if (this.gameMode === 'online') {
@@ -1109,6 +1371,48 @@ class Game {
     } else {
       this.saveActiveGameState();
     }
+  }
+
+  setNewGameButtonLabel(label) {
+    const text = this.newGameBtn.querySelector('span');
+    if (text) text.textContent = label;
+  }
+
+  announce(message) {
+    if (this.boardAnnouncer) this.boardAnnouncer.textContent = message;
+  }
+
+  awardResult(type, winner, winnerName) {
+    if (this.lastResult) return;
+    const stats = this.scores[this.gameMode];
+    if (type === 'draw') {
+      stats.draws++;
+    } else {
+      stats[winner === 1 ? 'p1' : 'p2']++;
+      this.allTimeScores[winnerName] = (this.allTimeScores[winnerName] || 0) + 1;
+    }
+    this.lastResult = { type, winner, winnerName, mode: this.gameMode };
+  }
+
+  rollbackLastResult() {
+    const result = this.lastResult;
+    if (!result || result.mode !== this.gameMode) return;
+    const stats = this.scores[result.mode];
+    if (result.type === 'draw') {
+      stats.draws = Math.max(0, stats.draws - 1);
+    } else {
+      const scoreKey = result.winner === 1 ? 'p1' : 'p2';
+      stats[scoreKey] = Math.max(0, stats[scoreKey] - 1);
+      if (result.winnerName) {
+        this.allTimeScores[result.winnerName] = Math.max(0, (this.allTimeScores[result.winnerName] || 0) - 1);
+        if (this.allTimeScores[result.winnerName] === 0) delete this.allTimeScores[result.winnerName];
+      }
+    }
+    this.lastResult = null;
+    this.saveStats();
+    this.saveAllTimeScores();
+    this.renderScores();
+    this.updateAllTimeScoreUI();
   }
   
   updateTurnUI() {
@@ -1129,6 +1433,7 @@ class Game {
         p1Card.classList.remove('active');
         p2Card.classList.remove('active');
       }
+      this.updateColumnControls();
       return;
     }
     
@@ -1163,6 +1468,18 @@ class Game {
         this.clearPreviews();
       }
     }
+    this.updateColumnControls();
+  }
+
+  updateColumnControls() {
+    this.columnsContainer?.querySelectorAll('.board-column').forEach((button) => {
+      const col = Number(button.dataset.col);
+      const spaces = this.board.reduce((count, row) => count + (row[col] === 0 ? 1 : 0), 0);
+      const letter = String.fromCharCode(65 + col);
+      button.disabled = spaces === 0 || this.gameOver;
+      button.setAttribute('aria-disabled', (!this.canLocalPlayerAct(false) || spaces === 0).toString());
+      button.setAttribute('aria-label', `Drop token in column ${letter}. ${spaces} ${spaces === 1 ? 'space' : 'spaces'} available.`);
+    });
   }
   
   highlightWinningTokens(cells) {
@@ -1226,97 +1543,109 @@ class Game {
   }
   
   
-  // ================= WEBRTC ONLINE MULTIPLAYER SERVICES =================
+  // ================= FIREBASE ONLINE MULTIPLAYER SERVICES =================
   
-  initFirebase(targetId = null) {
+  async initFirebase(targetId = null) {
     this.destroyFirebase();
-    
+    const generation = this.gameGeneration;
     this.peerStatus.textContent = "Connecting...";
     this.peerStatus.className = "status-badge waiting";
-    
-    // Fallback if db isn't initialized yet
-    if (typeof db === 'undefined' || !db) {
-       alert("Firebase is not configured. Please add your config to app.js");
-       this.peerStatus.textContent = "Error";
-       this.peerStatus.className = "status-badge disconnected";
-       return;
+
+    let database;
+    try {
+      database = await ensureFirebase();
+    } catch (error) {
+      console.error('Unable to load online play', error);
+      this.peerStatus.textContent = "Online play unavailable";
+      this.peerStatus.className = "status-badge disconnected";
+      return;
     }
+    if (generation !== this.gameGeneration || this.gameMode !== 'online') return;
 
     if (targetId) {
+      if (!isValidRoomId(targetId)) {
+        this.peerStatus.textContent = "Invalid room code";
+        this.peerStatus.className = "status-badge disconnected";
+        return;
+      }
       // Guest joining room
       this.isOnlineHost = false;
       this.p1NameText.textContent = 'Host (Red)';
-      this.p2NameText.textContent = this.inputP2Name.value.trim() || 'Guest (Yellow)';
+      this.p2NameText.textContent = sanitizePlayerName(this.inputP2Name.value, 'Guest (Yellow)');
       
       this.peerStatus.textContent = "Connecting to Room...";
       
-      this.roomRef = db.ref('rooms/' + targetId);
-      this.roomRef.once('value').then(snapshot => {
-        if (snapshot.exists()) {
+      this.peerId = targetId;
+      this.roomRef = database.ref('rooms/' + targetId);
+      try {
+        const snapshot = await this.roomRef.once('value');
+        if (snapshot.exists() && Number(snapshot.val().expiresAt) > Date.now()) {
           const data = snapshot.val();
-          this.p1NameText.textContent = data.hostName || 'Host (Red)';
+          this.p1NameText.textContent = sanitizePlayerName(data.hostName, 'Host (Red)');
           
-          this.roomRef.update({
+          await this.roomRef.update({
             guestName: this.p2NameText.textContent,
             status: 'playing'
-          }).then(() => {
-            this.setupFirebaseListeners(targetId);
           });
+          this.setupFirebaseListeners(targetId);
         } else {
-          alert("Room not found!");
-          this.peerStatus.textContent = "Room Not Found";
+          this.peerStatus.textContent = "Room not found or expired";
           this.peerStatus.className = "status-badge disconnected";
         }
-      });
+      } catch (error) {
+        console.error('Unable to join room', error);
+        this.peerStatus.textContent = "Could not join room";
+        this.peerStatus.className = "status-badge disconnected";
+      }
     } else {
       // Host creating room
       this.isOnlineHost = true;
-      this.p1NameText.textContent = this.inputP1Name.value.trim() || 'Host (Red)';
+      this.p1NameText.textContent = sanitizePlayerName(this.inputP1Name.value, 'Host (Red)');
       this.p2NameText.textContent = 'Waiting...';
       
-      const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+      const roomId = createRoomId();
       this.peerId = roomId;
-      this.roomRef = db.ref('rooms/' + roomId);
-      
-      this.roomRef.set({
-        hostName: this.p1NameText.textContent,
-        guestName: '',
-        status: 'waiting',
-        moveCounter: 0,
-        resetTrigger: 0,
-        timerData: null,
-        gameConfig: {
-          timeControl: this.timeControl,
-          matchTargetWins: this.matchTargetWins
-        }
-      }).then(() => {
+      this.roomRef = database.ref('rooms/' + roomId);
+      const createdAt = Date.now();
+      const expiresAt = createdAt + (6 * 60 * 60 * 1000);
+
+      try {
+        await this.roomRef.set({
+          hostName: this.p1NameText.textContent,
+          guestName: '',
+          status: 'waiting',
+          createdAt,
+          expiresAt,
+          resetTrigger: 0,
+          gameConfig: {
+            timeControl: this.timeControl,
+            matchTargetWins: this.matchTargetWins
+          }
+        });
+        this.disconnectRegistration = this.roomRef.onDisconnect();
+        this.disconnectRegistration.remove();
         this.setupFirebaseListeners(roomId);
-        
-        // Keep settings drawer OPEN so Host can copy the share link
+
         this.peerStatus.textContent = "Waiting for Friend...";
         this.peerStatus.className = "status-badge waiting";
-        
-        // Build share link — handle file:// protocol and http(s)
-        let shareLink;
-        if (window.location.protocol === 'file:') {
-          shareLink = `${window.location.href.split('?')[0]}?join=${roomId}`;
-        } else {
-          const origin = window.location.origin;
-          const path = window.location.pathname;
-          shareLink = `${origin}${path}?join=${roomId}`;
-        }
-        
+        const shareLink = `${window.location.origin}${window.location.pathname}?join=${roomId}`;
         this.onlineShareUrl.value = shareLink;
-        this.onlineQrCode.src = `https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(shareLink)}`;
-        this.onlineQrCode.style.display = "block";
-      });
+      } catch (error) {
+        console.error('Unable to create room', error);
+        this.peerStatus.textContent = "Could not create room";
+        this.peerStatus.className = "status-badge disconnected";
+      }
     }
     this.updateAllTimeScoreUI();
   }
   
   connectToPeer(targetId) {
-    if (!targetId) return;
-    this.initFirebase(targetId);
+    if (!isValidRoomId(targetId)) {
+      this.peerStatus.textContent = "Enter a valid room code";
+      this.peerStatus.className = "status-badge disconnected";
+      return;
+    }
+    void this.initFirebase(targetId);
   }
   
   setupFirebaseListeners(roomId) {
@@ -1325,8 +1654,7 @@ class Game {
       this.peerStatus.className = "status-badge connected";
       this.sounds.playClick();
       
-      // Close settings drawer on connection
-      this.settingsDrawer.classList.add('hidden');
+      this.closeSettings();
       
       this.updateAllTimeScoreUI();
       if (this.isOnlineHost) {
@@ -1353,10 +1681,14 @@ class Game {
         this.updateMatchFormatUI();
         this.updatePlayerTimersUI();
         document.querySelectorAll('.time-btn').forEach(b => {
-          b.classList.toggle('active', parseInt(b.dataset.time, 10) === this.timeControl);
+          const selected = parseInt(b.dataset.time, 10) === this.timeControl;
+          b.classList.toggle('active', selected);
+          b.setAttribute('aria-pressed', selected ? 'true' : 'false');
         });
         document.querySelectorAll('.match-btn').forEach(b => {
-          b.classList.toggle('active', parseInt(b.dataset.wins, 10) === this.matchTargetWins);
+          const selected = parseInt(b.dataset.wins, 10) === this.matchTargetWins;
+          b.classList.toggle('active', selected);
+          b.setAttribute('aria-pressed', selected ? 'true' : 'false');
         });
       }
 
@@ -1389,10 +1721,14 @@ class Game {
           this.updateMatchFormatUI();
           this.updatePlayerTimersUI();
           document.querySelectorAll('.time-btn').forEach(b => {
-            b.classList.toggle('active', parseInt(b.dataset.time, 10) === this.timeControl);
+            const selected = parseInt(b.dataset.time, 10) === this.timeControl;
+            b.classList.toggle('active', selected);
+            b.setAttribute('aria-pressed', selected ? 'true' : 'false');
           });
           document.querySelectorAll('.match-btn').forEach(b => {
-            b.classList.toggle('active', parseInt(b.dataset.wins, 10) === this.matchTargetWins);
+            const selected = parseInt(b.dataset.wins, 10) === this.matchTargetWins;
+            b.classList.toggle('active', selected);
+            b.setAttribute('aria-pressed', selected ? 'true' : 'false');
           });
         }
       }
@@ -1441,9 +1777,14 @@ class Game {
   
   destroyFirebase() {
     if (this.roomRef) {
+      const oldRoom = this.roomRef;
+      const shouldRemoveRoom = this.isOnlineHost;
       this.roomRef.off();
       this.roomRef = null;
+      if (shouldRemoveRoom) oldRoom.remove().catch(() => {});
     }
+    this.disconnectRegistration?.cancel?.();
+    this.disconnectRegistration = null;
     this.peerId = null;
     this.lastMoveCounter = 0;
     this.localResetTrigger = 0;
@@ -1459,26 +1800,10 @@ class Game {
   startTimer() {
     this.pauseTimer();
     this.timerSeconds = 0;
+    this.lastTimerTimestamp = Date.now();
     this.updateTimerDisplay();
-    this.timerInterval = setInterval(() => {
-      this.timerSeconds++;
-      this.updateTimerDisplay();
-      
-      this.tickPlayerClocks();
-
-      // Firebase Host clock broadcast
-      if (this.gameMode === 'online' && this.isOnlineHost && this.roomRef && !this.gameOver) {
-        this.localTimerTrigger = (this.localTimerTrigger || 0) + 1;
-        this.roomRef.update({ 
-          timerData: {
-            trigger: this.localTimerTrigger,
-            seconds: this.timerSeconds,
-            p1Time: this.p1TimeRemaining,
-            p2Time: this.p2TimeRemaining
-          }
-        });
-      }
-    }, 1000);
+    if (this.gameMode === 'online' && !this.isOnlineHost) return;
+    this.timerInterval = setInterval(() => this.advanceTimer(), 250);
   }
   
   pauseTimer() {
@@ -1489,25 +1814,47 @@ class Game {
   }
   
   resumeTimer() {
-    if (!this.timerInterval && !this.gameOver) {
-      this.timerInterval = setInterval(() => {
-        this.timerSeconds++;
-        this.updateTimerDisplay();
-        this.tickPlayerClocks();
-      }, 1000);
+    if (this.timerInterval || this.gameOver || this.moveHistory.length === 0) return;
+    this.lastTimerTimestamp = Date.now();
+    if (this.gameMode === 'online' && !this.isOnlineHost) return;
+    this.timerInterval = setInterval(() => this.advanceTimer(), 250);
+  }
+
+  advanceTimer() {
+    if (this.gameOver || !this.lastTimerTimestamp) return;
+    const now = Date.now();
+    const elapsed = Math.floor((now - this.lastTimerTimestamp) / 1000);
+    if (elapsed < 1) return;
+    this.lastTimerTimestamp += elapsed * 1000;
+    this.timerSeconds += elapsed;
+    this.tickPlayerClocks(elapsed);
+    this.updateTimerDisplay();
+    this.saveActiveGameState();
+
+    if (this.gameMode === 'online' && this.isOnlineHost && this.roomRef && !this.gameOver) {
+      this.localTimerTrigger = (this.localTimerTrigger || 0) + 1;
+      this.roomRef.update({
+        timerData: {
+          trigger: this.localTimerTrigger,
+          seconds: this.timerSeconds,
+          p1Time: this.p1TimeRemaining,
+          p2Time: this.p2TimeRemaining,
+          updatedAt: Date.now()
+        }
+      }).catch(() => {});
     }
   }
   
-  tickPlayerClocks() {
+  tickPlayerClocks(elapsed = 1) {
     if (this.timeControl > 0 && !this.gameOver) {
       if (this.activePlayer === 1) {
-        this.p1TimeRemaining--;
+        this.p1TimeRemaining -= elapsed;
         if (this.p1TimeRemaining <= 0) {
           this.p1TimeRemaining = 0;
           this.handleTimeout(1);
         }
       } else {
-        this.p2TimeRemaining--;
+        this.p2TimeRemaining -= elapsed;
         if (this.p2TimeRemaining <= 0) {
           this.p2TimeRemaining = 0;
           this.handleTimeout(2);
@@ -1553,16 +1900,18 @@ class Game {
     
     this.sounds.playWin();
     
-    this.scores[this.gameMode][winner === 1 ? 'p1' : 'p2']++;
-    this.allTimeScores[winnerName] = (this.allTimeScores[winnerName] || 0) + 1;
+    this.awardResult('timeout', winner, winnerName);
     
     this.saveStats();
     this.saveAllTimeScores();
+    this.saveActiveGameState();
     this.renderScores();
     this.updateAllTimeScoreUI();
     
     this.turnText.textContent = `${winnerName} Wins!`;
+    this.announce(`${winnerName} wins on time.`);
     this.turnColorIndicator.className = `turn-color-indicator ${winner === 1 ? 'red' : 'yellow'}`;
+    this.updateColumnControls();
     
     const modeStats = this.scores[this.gameMode];
     const isMatchWin = this.matchTargetWins > 0 && (modeStats.p1 >= this.matchTargetWins || modeStats.p2 >= this.matchTargetWins);
@@ -1571,11 +1920,11 @@ class Game {
     this.winSubtitle.textContent = isMatchWin 
       ? `${winnerName} wins the match ${modeStats.p1} - ${modeStats.p2}!` 
       : `${winnerName} wins on time!`;
-    this.winEmoji.textContent = isMatchWin ? '🏆' : '⏱️';
+    this.winEmoji.textContent = isMatchWin ? '1' : '00';
     
-    setTimeout(() => {
+    this.scheduleGameTask(() => {
       this.winOverlay.classList.remove('hidden');
-      setTimeout(() => {
+      this.scheduleGameTask(() => {
         this.winOverlay.classList.add('hidden');
       }, 3500);
     }, 500);
@@ -1593,7 +1942,13 @@ class Game {
     const stored = localStorage.getItem('connect4_alltime_db');
     if (stored) {
       try {
-        this.allTimeScores = JSON.parse(stored);
+        this.allTimeScores = normalizeAllTimeScores(JSON.parse(stored));
+        const legacyKey = Object.keys(this.allTimeScores).find((name) => name.toLowerCase() === LEGACY_COMPUTER_NAME);
+        if (legacyKey) {
+          this.allTimeScores.Computer = (this.allTimeScores.Computer || 0) + (Number(this.allTimeScores[legacyKey]) || 0);
+          delete this.allTimeScores[legacyKey];
+          this.saveAllTimeScores();
+        }
       } catch (e) {
         console.error("Failed to parse all-time db", e);
       }
@@ -1636,7 +1991,9 @@ class Game {
       matchTargetWins: this.matchTargetWins,
       p1TimeRemaining: this.p1TimeRemaining,
       p2TimeRemaining: this.p2TimeRemaining,
-      gameOver: this.gameOver
+      gameOver: this.gameOver,
+      lastResult: this.lastResult,
+      savedAt: Date.now()
     };
     localStorage.setItem('connect4_active_game', JSON.stringify(state));
   }
@@ -1651,38 +2008,53 @@ class Game {
       // Do not restore Online states dynamically from previous local storage runs
       if (state.gameMode === 'online') return false;
       
+      const validBoard = Array.isArray(state.board)
+        && state.board.length === this.rows
+        && state.board.every((row) => Array.isArray(row) && row.length === this.cols && row.every((cell) => [0, 1, 2].includes(cell)));
+      const validHistory = Array.isArray(state.moveHistory)
+        && state.moveHistory.every((move) => Number.isInteger(move.row) && move.row >= 0 && move.row < this.rows
+          && Number.isInteger(move.col) && move.col >= 0 && move.col < this.cols && [1, 2].includes(move.player));
+      if (!validBoard || !validHistory) return false;
       this.board = state.board;
       this.moveHistory = state.moveHistory;
-      this.activePlayer = state.activePlayer;
-      this.gameMode = state.gameMode;
-      this.difficulty = state.difficulty;
-      this.scores = state.scores;
-      this.timerSeconds = state.timerSeconds;
-      
-      this.timeControl = state.timeControl || 0;
-      this.matchTargetWins = state.matchTargetWins || 0;
+      this.activePlayer = state.activePlayer === 2 ? 2 : 1;
+      this.gameMode = state.gameMode === 'pve' ? 'pve' : 'pvp';
+      this.difficulty = ['easy', 'medium', 'hard', 'expert'].includes(state.difficulty) ? state.difficulty : 'medium';
+      this.scores = normalizeScores(state.scores || this.scores);
+      this.timerSeconds = Math.max(0, Number(state.timerSeconds) || 0);
+
+      this.timeControl = [0, 15, 30, 60, 180, 300].includes(state.timeControl) ? state.timeControl : 0;
+      this.matchTargetWins = [0, 3, 5].includes(state.matchTargetWins) ? state.matchTargetWins : 0;
       this.updateMatchFormatUI();
       
-      this.p1TimeRemaining = state.p1TimeRemaining !== undefined ? state.p1TimeRemaining : this.timeControl;
-      this.p2TimeRemaining = state.p2TimeRemaining !== undefined ? state.p2TimeRemaining : this.timeControl;
+      this.p1TimeRemaining = Math.max(0, Number(state.p1TimeRemaining ?? this.timeControl) || 0);
+      this.p2TimeRemaining = Math.max(0, Number(state.p2TimeRemaining ?? this.timeControl) || 0);
       this.updatePlayerTimersUI();
       
-      this.gameOver = state.gameOver;
+      this.gameOver = Boolean(state.gameOver);
+      this.lastResult = state.lastResult || null;
       
-      const p1InputName = state.p1_name_input || state.p1_name || 'Red Player';
-      const p2InputName = state.p2_name_input || state.p2_name_display || 'Yellow Player';
-      this.p1NameText.textContent = state.p1_name || p1InputName;
+      const p1InputName = sanitizePlayerName(state.p1_name_input || state.p1_name, 'Red Player');
+      const p2InputName = sanitizePlayerName(state.p2_name_input || state.p2_name_display, 'Yellow Player');
+      this.p1NameText.textContent = sanitizePlayerName(state.p1_name, p1InputName);
       this.inputP1Name.value = p1InputName;
       this.inputP2Name.value = p2InputName;
-      this.p2NameText.textContent = this.gameMode === 'pve' ? 'Computer' : (state.p2_name_display || p2InputName);
+      this.p2NameText.textContent = this.gameMode === 'pve'
+        ? 'Computer'
+        : sanitizePlayerName(state.p2_name_display, p2InputName);
       
-      document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.mode-btn').forEach(b => {
+        b.classList.remove('active');
+        b.setAttribute('aria-pressed', 'false');
+      });
       if (this.gameMode === 'pvp') {
         this.modePvP.classList.add('active');
+        this.modePvP.setAttribute('aria-pressed', 'true');
         if (this.p1NameInputGroup) this.p1NameInputGroup.classList.remove('hidden');
         this.p2NameInputGroup.classList.remove('hidden');
       } else if (this.gameMode === 'pve') {
         this.modePvE.classList.add('active');
+        this.modePvE.setAttribute('aria-pressed', 'true');
         this.difficultyGroup.classList.remove('hidden');
         if (this.p1NameInputGroup) this.p1NameInputGroup.classList.remove('hidden');
         this.p2NameInputGroup.classList.add('hidden');
@@ -1690,7 +2062,16 @@ class Game {
       
       document.querySelectorAll('.diff-btn').forEach(b => {
         b.classList.toggle('active', b.dataset.diff === this.difficulty);
+        b.setAttribute('aria-pressed', b.dataset.diff === this.difficulty ? 'true' : 'false');
       });
+
+      const elapsedAway = !this.gameOver && this.moveHistory.length > 0 && state.savedAt
+        ? Math.max(0, Math.floor((Date.now() - Number(state.savedAt)) / 1000))
+        : 0;
+      if (elapsedAway > 0) {
+        this.timerSeconds += elapsedAway;
+        this.tickPlayerClocks(elapsedAway);
+      }
       
       this.tokensContainer.innerHTML = '';
       this.resetMoveTracker();
@@ -1713,6 +2094,16 @@ class Game {
         const winInfo = this.checkWinCondition(this.board);
         if (winInfo) {
           this.highlightWinningTokens(winInfo.cells);
+          if (!this.lastResult) {
+            this.lastResult = {
+              type: 'win',
+              winner: winInfo.player,
+              winnerName: winInfo.player === 1 ? this.p1NameText.textContent : this.p2NameText.textContent,
+              mode: this.gameMode
+            };
+          }
+        } else if (this.isBoardFull() && !this.lastResult) {
+          this.lastResult = { type: 'draw', winner: null, winnerName: null, mode: this.gameMode };
         }
       } else {
         if (this.moveHistory.length > 0) {
@@ -1733,9 +2124,55 @@ class Game {
   }
   
   // ================= COMPUTER STRATEGY =================
-  
-  getBoardHash(board) {
-    let hash = "";
+
+  async getBestMoveAsync(board, player) {
+    const boardCopy = board.map((row) => [...row]);
+    try {
+      const result = await this.aiWorker.request('best-move', {
+        board: boardCopy,
+        player,
+        difficulty: this.difficulty
+      });
+      return result.bestCol;
+    } catch (error) {
+      if (error.message === 'Cancelled') return null;
+      console.warn('Computer worker unavailable; using the local engine.', error);
+      const currentBoard = this.board;
+      this.board = boardCopy;
+      try {
+        return this.getBestMoveForPlayer(player);
+      } finally {
+        this.board = currentBoard;
+      }
+    }
+  }
+
+  async getPositionAnalysis(board, player) {
+    try {
+      return await this.aiWorker.request('analyze', {
+        board: board.map((row) => [...row]),
+        player,
+        difficulty: this.difficulty
+      });
+    } catch (error) {
+      if (error.message === 'Cancelled') return null;
+      console.warn('Coach worker unavailable; using a shallower local analysis.', error);
+      const currentBoard = this.board;
+      const currentDifficulty = this.difficulty;
+      this.board = board.map((row) => [...row]);
+      this.difficulty = currentDifficulty === 'expert' ? 'hard' : currentDifficulty;
+      try {
+        const bestCol = this.getBestMoveForPlayer(player);
+        return { bestCol, bestMoves: bestCol === null ? [] : [bestCol], moveScores: {}, bestScore: 0 };
+      } finally {
+        this.board = currentBoard;
+        this.difficulty = currentDifficulty;
+      }
+    }
+  }
+
+  getBoardHash(board, isMaximizing = false) {
+    let hash = isMaximizing ? "2:" : "1:";
     for (let r = 0; r < 6; r++) {
       for (let c = 0; c < 7; c++) {
         hash += board[r][c];
@@ -1825,7 +2262,7 @@ class Game {
   }
   
   minimax(board, depth, alpha, beta, isMaximizing) {
-    const hash = this.getBoardHash(board);
+    const hash = this.getBoardHash(board, isMaximizing);
     const entry = this.transpositionTable.get(hash);
     
     const TT_EXACT = 0;
@@ -1854,6 +2291,7 @@ class Game {
     }
     
     const alphaOrig = alpha;
+    const betaOrig = beta;
     const activePlayer = isMaximizing ? 2 : 1;
     const orderedMoves = this.orderMoves(board, validMoves, activePlayer);
     
@@ -1871,7 +2309,7 @@ class Game {
       
       let flag = TT_EXACT;
       if (maxEval <= alphaOrig) flag = TT_ALPHA;
-      else if (maxEval >= beta) flag = TT_BETA;
+      else if (maxEval >= betaOrig) flag = TT_BETA;
       this.transpositionTable.set(hash, { score: maxEval, depth, flag });
       
       return maxEval;
@@ -1889,7 +2327,7 @@ class Game {
       
       let flag = TT_EXACT;
       if (minEval <= alphaOrig) flag = TT_ALPHA;
-      else if (minEval >= beta) flag = TT_BETA;
+      else if (minEval >= betaOrig) flag = TT_BETA;
       this.transpositionTable.set(hash, { score: minEval, depth, flag });
       
       return minEval;
@@ -2017,12 +2455,12 @@ class Game {
       try {
         const parsed = JSON.parse(stored);
         if (parsed && parsed.scores) {
-          this.scores = parsed.scores;
+          this.scores = normalizeScores(parsed.scores);
           if (parsed.matchTargetWins !== undefined) {
             this.matchTargetWins = parsed.matchTargetWins;
           }
         } else {
-          this.scores = parsed;
+          this.scores = normalizeScores(parsed);
         }
       } catch (e) {
         console.error("Failed to load scores", e);
@@ -2050,11 +2488,11 @@ class Game {
       this.p2MatchFormatUI.textContent = `FIRST TO ${this.matchTargetWins}`;
       this.p1MatchFormatUI.classList.remove('hidden');
       this.p2MatchFormatUI.classList.remove('hidden');
-      this.newGameBtn.innerHTML = "<span class=\"icon\">+</span> Next Game";
+      this.setNewGameButtonLabel('Next Game');
     } else {
       this.p1MatchFormatUI.classList.add('hidden');
       this.p2MatchFormatUI.classList.add('hidden');
-      this.newGameBtn.innerHTML = "<span class=\"icon\">+</span> New Game";
+      this.setNewGameButtonLabel('New Game');
     }
   }
   
@@ -2149,10 +2587,10 @@ class Game {
     return list;
   }
 
-  evaluateMoveForCoach(boardState, player, chosenCol) {
+  async evaluateMoveForCoach(boardState, player, chosenCol) {
     if (!this.coachPanel || !this.coachEnabled) return;
-    
-    this.transpositionTable = new Map();
+
+    const generation = this.gameGeneration;
     this.coachPanel.classList.remove('hidden');
     this.coachMessage.textContent = "Analyzing...";
     this.coachIcon.textContent = "◇";
@@ -2201,35 +2639,12 @@ class Game {
     
     const oppDoubleThreatsBefore = this.getDoubleThreatColumns(boardState, opponent);
     
-    // --- 3. Compute Minimax scores for all options ---
-    let depth = 5;
-    if (this.difficulty === 'medium') depth = 3;
-    if (this.difficulty === 'expert') depth = 12;
-    
-    const moveScores = {};
-    let bestScore = player === 2 ? -Infinity : Infinity;
-    const bestMoves = [];
-    
-    for (let col of validMoves) {
-      const row = this.getNextOpenRow(boardState, col);
-      boardState[row][col] = player;
-      const nextIsMaximizing = player === 1;
-      const score = this.minimax(boardState, depth - 1, -Infinity, Infinity, nextIsMaximizing);
-      boardState[row][col] = 0;
-      
-      moveScores[col] = score;
-      if (player === 2) {
-        if (score > bestScore) { bestScore = score; }
-      } else {
-        if (score < bestScore) { bestScore = score; }
-      }
-    }
-    
-    for (let col of validMoves) {
-      if (moveScores[col] === bestScore) {
-        bestMoves.push(col);
-      }
-    }
+    // --- 3. Compute engine scores away from the main UI thread ---
+    const analysis = await this.getPositionAnalysis(boardState, player);
+    if (!analysis || generation !== this.gameGeneration || !this.coachEnabled) return;
+    const moveScores = analysis.moveScores || {};
+    const bestScore = analysis.bestScore;
+    const bestMoves = analysis.bestMoves?.length ? analysis.bestMoves : [analysis.bestCol].filter((col) => col !== null);
     
     // --- 4. Evaluate actual move post-state ---
     const testBoard = JSON.parse(JSON.stringify(boardState));
@@ -2263,9 +2678,9 @@ class Game {
       styleClass = "forced-loss";
       const bestCol = bestMoves[0];
       if (bestMoves.includes(chosenCol)) {
-        msg = `Lost Position. Your opponent has a forced win, but column ${String.fromCharCode(65 + chosenCol)} offers the best resistance.`;
+        msg = `Difficult Position. The engine sees a forcing sequence, but column ${String.fromCharCode(65 + chosenCol)} offers the best resistance.`;
       } else {
-        msg = `Lost Position. The game is lost. Column ${String.fromCharCode(65 + bestCol)} would have resisted longer than column ${String.fromCharCode(65 + chosenCol)}.`;
+        msg = `Difficult Position. The engine prefers column ${String.fromCharCode(65 + bestCol)} as the strongest resistance.`;
       }
     }
     else if (playerWonNow) {
@@ -2306,11 +2721,12 @@ class Game {
     else if (bestMoves.includes(chosenCol)) {
       icon = "⭐";
       styleClass = "best";
-      msg = "Best Move! You found the optimal continuation.";
+      msg = "Strong Move. This matches the engine's preferred continuation.";
     }
     else {
       // Numerical evaluation drop check
-      const scoreDiff = Math.abs(moveScores[chosenCol] - bestScore);
+      const chosenScore = moveScores[chosenCol] ?? bestScore;
+      const scoreDiff = Math.abs(chosenScore - bestScore);
       const bestCol = bestMoves[0];
       
       const preStats = this.getBoardStats(boardState, player);

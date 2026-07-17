@@ -1,6 +1,6 @@
 # Connect Four - Premium Web Arcade
 
-A responsive, browser-based Connect Four game with pass-and-play, computer opponents, PeerJS WebRTC friend matches, move history, coach feedback, persistent scores, token art, and synthesized arcade-style audio.
+A responsive browser Connect Four game with pass-and-play, computer opponents, private friend rooms, move history, optional engine feedback, persistent scores, custom token art, and synthesized arcade audio.
 
 ![Red Connect Four token](https://raw.githubusercontent.com/nanogy98-ai/friendly-noether/main/red-connect-four-token.png)
 
@@ -9,14 +9,14 @@ A responsive, browser-based Connect Four game with pass-and-play, computer oppon
 ## Features
 
 * **Arcade board presentation**: A blue plastic-style board with beveled holes, drop animations, highlights, and win celebrations.
-* **Custom token assets**: The red and yellow PNG token files are used for in-board pieces, with CSS gradients as visual fallback.
+* **Custom token assets**: Optimized red and yellow WebP artwork is used for in-board pieces, with CSS gradients as a fallback.
 * **Pass & Play**: Local two-player play on one device.
-* **Vs Computer**: Easy, Medium, and Hard computer strengths using Minimax with alpha-beta pruning and center-column move ordering.
-* **Move Coach**: Optional post-move feedback for missed wins, missed blocks, strong moves, and inaccurate moves.
+* **Vs Computer**: Four strengths use a Web Worker search engine with alpha-beta pruning, iterative deepening, and a bounded thinking time.
+* **Move Coach**: Optional post-move engine feedback for immediate wins, missed blocks, threats, and stronger alternatives.
 * **Move history**: Rebuilds correctly across new games, undo, and restored sessions.
 * **Persistent state**: Session scores, all-time player wins, names, timer, active board, and difficulty are saved in `localStorage`.
-* **PeerJS online matches**: Share a generated invite link or paste a peer ID to play directly with a friend.
-* **Accessible controls**: Board columns are keyboard-focusable controls with labels, and turn/win changes are announced through live regions.
+* **Private online rooms**: Share a six-hour Firebase room link or paste its unguessable room code. Rooms are removed when the host disconnects.
+* **Accessible controls**: Board columns are keyboard-focusable controls with labels, dialogs trap focus, and move/results are announced through live regions.
 
 ---
 
@@ -34,7 +34,7 @@ Then open:
 http://localhost:8000/
 ```
 
-You can also deploy the files to any static host. Pass & Play and computer modes run fully in the browser. Online friend matches use PeerJS signaling plus WebRTC data channels, so they depend on browser/network support for peer-to-peer connections.
+You can also deploy the files to any static host. Pass & Play and computer modes run fully in the browser. Online friend matches use Firebase Realtime Database and require the rules in `database.rules.json`.
 
 ---
 
@@ -42,10 +42,10 @@ You can also deploy the files to any static host. Pass & Play and computer modes
 
 1. Open Settings.
 2. Choose **Play with a Friend**.
-3. Host copies the generated invite link or peer ID.
-4. Guest opens the invite link or pastes the peer ID and connects.
+3. Host copies the generated invitation link or room code.
+4. Guest opens the invitation link or pastes the room code and connects.
 
-Either player can start a fresh online board; the reset is synchronized to the peer.
+The host controls shared match settings and synchronizes the board and clocks. Online rooms are casual private matches, not authenticated competitive sessions.
 
 ---
 
@@ -57,4 +57,4 @@ The regression suite uses Node's built-in test runner:
 node --test tests/game-regressions.test.mjs
 ```
 
-The tests cover the state bugs that matter most for playability: hidden settings groups, first-turn text, move history reset/undo/restore, and saved player names.
+The tests cover game rules, engine tactics, state restoration, score rollback, legacy-name migration, timer persistence, and round cancellation.

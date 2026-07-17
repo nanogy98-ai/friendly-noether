@@ -4,9 +4,11 @@ import { test } from 'node:test';
 import vm from 'node:vm';
 
 const APP_SOURCE = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
+const ENGINE_SOURCE = readFileSync(new URL('../connect-four-engine.js', import.meta.url), 'utf8');
 const CSS_SOURCE = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 const HTML_SOURCE = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const README_SOURCE = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
+const RULES = JSON.parse(readFileSync(new URL('../database.rules.json', import.meta.url), 'utf8'));
 
 class FakeClassList {
   constructor(element) {
@@ -131,6 +133,9 @@ class FakeElement {
 class FakeDocument {
   constructor() {
     this.elements = new Map();
+    this.eventListeners = {};
+    this.activeElement = null;
+    this.head = this.register(new FakeElement('head', 'head'));
     this.body = this.register(new FakeElement('body', 'body'));
     this.body.classList.add('dark-theme');
     this.diffButtons = ['easy', 'medium', 'hard'].map((diff) => {
@@ -191,6 +196,11 @@ class FakeDocument {
     return new FakeElement(tagName);
   }
 
+  addEventListener(type, listener) {
+    this.eventListeners[type] ||= [];
+    this.eventListeners[type].push(listener);
+  }
+
   querySelectorAll(selector) {
     if (selector === '.diff-btn') return this.diffButtons;
     if (selector === '.mode-btn') return this.modeButtons;
@@ -249,8 +259,16 @@ function makeStorage(seed = {}) {
   };
 }
 
-function loadGame(storageSeed = {}) {
+function loadGame(storageSeed = {}, options = {}) {
   const document = new FakeDocument();
+  let nextTimerId = 1;
+  const queuedTimers = new Map();
+  const setTimeoutImpl = (fn) => {
+    const id = nextTimerId++;
+    if (options.deferTimeouts) queuedTimers.set(id, fn);
+    else fn();
+    return id;
+  };
   const context = {
     console,
     document,
@@ -268,9 +286,9 @@ function loadGame(storageSeed = {}) {
     confirm: () => true,
     setInterval: () => 1,
     clearInterval() {},
-    setTimeout: (fn) => {
-      fn();
-      return 1;
+    setTimeout: setTimeoutImpl,
+    clearTimeout(id) {
+      queuedTimers.delete(id);
     },
     requestAnimationFrame() {},
     Peer: class {}
@@ -279,7 +297,21 @@ function loadGame(storageSeed = {}) {
   vm.runInNewContext(`${APP_SOURCE}\nglobalThis.__exports = { Game };`, context);
   const game = new context.__exports.Game();
   game.sounds.enabled = false;
-  return { context, document, game };
+  const flushTimers = () => {
+    while (queuedTimers.size > 0) {
+      const timers = Array.from(queuedTimers.entries());
+      queuedTimers.clear();
+      timers.forEach(([, fn]) => fn());
+    }
+  };
+  return { context, document, flushTimers, game, queuedTimers };
+}
+
+function loadEngine() {
+  const context = { console, performance };
+  context.globalThis = context;
+  vm.runInNewContext(ENGINE_SOURCE, context);
+  return context.ConnectFourEngine;
 }
 
 test('CSS defines a reusable hidden utility for initially hidden settings groups', () => {
@@ -438,4 +470,149 @@ test('saved active game state preserves each player input separately', () => {
   const stored = JSON.parse(context.localStorage.getItem('connect4_active_game'));
   assert.equal(stored.p1_name_input, 'Ada');
   assert.equal(stored.p2_name_input, 'Grace');
+});
+
+test('fresh games do not start the stopwatch before the first move', () => {
+  const { game } = loadGame();
+
+  assert.equal(game.timerInterval, null);
+  assert.equal(game.timerSeconds, 0);
+});
+
+test('new game cancels a pending token completion from the old board', () => {
+  const { game, flushTimers } = loadGame({}, { deferTimeouts: true });
+
+  game.makeMove(5, 3);
+  game.restartGame();
+  flushTimers();
+
+  assert.equal(game.moveHistory.length, 0);
+  assert.equal(game.activePlayer, 1);
+  assert.equal(game.gameOver, false);
+});
+
+test('new game cancels a pending computer reply', () => {
+  const { game, flushTimers } = loadGame({}, { deferTimeouts: true });
+  game.gameMode = 'pve';
+  game.activePlayer = 2;
+
+  game.triggerComputerMove();
+  game.restartGame();
+  flushTimers();
+
+  assert.equal(game.moveHistory.length, 0);
+  assert.equal(game.activePlayer, 1);
+});
+
+test('undoing a finished game rolls back session and all-time scores', () => {
+  const { game } = loadGame();
+  const columns = [0, 1, 0, 1, 0, 1, 0];
+  columns.forEach((col) => game.makeMove(game.getNextOpenRow(game.board, col), col));
+
+  assert.equal(game.gameOver, true);
+  assert.equal(game.scores.pvp.p1, 1);
+  assert.equal(game.allTimeScores['Red Player'], 1);
+
+  game.undoMove();
+
+  assert.equal(game.gameOver, false);
+  assert.equal(game.scores.pvp.p1, 0);
+  assert.equal(game.allTimeScores['Red Player'] ?? 0, 0);
+});
+
+test('restored timed games account for elapsed time away from the page', () => {
+  const state = {
+    board: Array.from({ length: 6 }, (_, row) => row === 5 ? [0, 0, 0, 1, 0, 0, 0] : Array(7).fill(0)),
+    moveHistory: [{ row: 5, col: 3, player: 1 }],
+    activePlayer: 2,
+    gameMode: 'pvp',
+    difficulty: 'medium',
+    scores: {
+      pvp: { p1: 0, p2: 0, draws: 0 },
+      pve: { p1: 0, p2: 0, draws: 0 },
+      online: { p1: 0, p2: 0, draws: 0 }
+    },
+    timerSeconds: 2,
+    timeControl: 15,
+    p1TimeRemaining: 15,
+    p2TimeRemaining: 15,
+    savedAt: Date.now() - 3500,
+    gameOver: false
+  };
+
+  const { game } = loadGame({ connect4_active_game: JSON.stringify(state) });
+
+  assert.equal(game.timerSeconds, 5);
+  assert.equal(game.p1TimeRemaining, 15);
+  assert.equal(game.p2TimeRemaining, 12);
+});
+
+test('legacy computer names cannot leak back into pass and play', () => {
+  const fakeName = ['Quant', 'um AI'].join('');
+  const storedState = {
+    board: Array.from({ length: 6 }, () => Array(7).fill(0)),
+    moveHistory: [],
+    activePlayer: 1,
+    gameMode: 'pve',
+    difficulty: 'medium',
+    scores: {
+      pvp: { p1: 0, p2: 0, draws: 0 },
+      pve: { p1: 0, p2: 0, draws: 0 },
+      online: { p1: 0, p2: 0, draws: 0 }
+    },
+    p1_name: 'Red Player',
+    p2_name_display: fakeName,
+    p2_name_input: fakeName,
+    timerSeconds: 0,
+    gameOver: false
+  };
+  const { game, document } = loadGame({ connect4_active_game: JSON.stringify(storedState) });
+
+  game.switchMode('pvp');
+
+  assert.equal(document.getElementById('input-p2-name').value, 'Yellow Player');
+  assert.equal(document.getElementById('p2-name-text').textContent, 'Yellow Player');
+});
+
+test('engine finds immediate wins and compulsory blocks', () => {
+  const engine = loadEngine();
+  const winningBoard = Array.from({ length: 6 }, () => Array(7).fill(0));
+  winningBoard[5] = [2, 2, 2, 0, 1, 0, 0];
+  const blockingBoard = Array.from({ length: 6 }, () => Array(7).fill(0));
+  blockingBoard[5] = [1, 1, 1, 0, 2, 0, 0];
+
+  assert.equal(engine.analyze(winningBoard, 2, 'medium').bestCol, 3);
+  assert.equal(engine.analyze(blockingBoard, 2, 'medium').bestCol, 3);
+});
+
+test('engine detects horizontal, vertical, and both diagonal wins', () => {
+  const engine = loadEngine();
+  const positions = [
+    [[5, 0], [5, 1], [5, 2], [5, 3]],
+    [[5, 0], [4, 0], [3, 0], [2, 0]],
+    [[5, 0], [4, 1], [3, 2], [2, 3]],
+    [[2, 0], [3, 1], [4, 2], [5, 3]]
+  ];
+
+  positions.forEach((cells) => {
+    const board = Array.from({ length: 6 }, () => Array(7).fill(0));
+    cells.forEach(([row, col]) => { board[row][col] = 1; });
+    assert.equal(engine.checkWin(board).player, 1);
+  });
+});
+
+test('online database rules deny root reads and require unguessable room ids', () => {
+  assert.equal(RULES.rules['.read'], false);
+  assert.equal(RULES.rules['.write'], false);
+  assert.match(RULES.rules.rooms.$roomId['.read'], /\{22\}/);
+  assert.match(RULES.rules.rooms.$roomId['.read'], /expiresAt/);
+});
+
+test('Firebase is removed from the critical render path', () => {
+  assert.doesNotMatch(HTML_SOURCE, /firebase-app\.js/);
+  assert.match(APP_SOURCE, /ensureFirebase/);
+});
+
+test('tablet layout covers the former 601 to 700 pixel breakpoint gap', () => {
+  assert.match(CSS_SOURCE, /@media\s*\(min-width:\s*601px\)\s*and\s*\(max-width:\s*1180px\)/);
 });

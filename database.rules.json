@@ -1,0 +1,58 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "rooms": {
+      "$roomId": {
+        ".read": "$roomId.matches(/^[A-Za-z0-9_-]{22}$/) && data.exists() && data.child('expiresAt').isNumber() && data.child('expiresAt').val() > now",
+        ".write": "$roomId.matches(/^[A-Za-z0-9_-]{22}$/) && ((!data.exists() && newData.exists() && newData.child('createdAt').isNumber() && newData.child('createdAt').val() >= now - 60000 && newData.child('createdAt').val() <= now + 60000 && newData.child('expiresAt').isNumber() && newData.child('expiresAt').val() > now && newData.child('expiresAt').val() <= now + 21600000) || (data.exists() && data.child('expiresAt').val() > now && (!newData.exists() || (newData.child('createdAt').val() === data.child('createdAt').val() && newData.child('expiresAt').val() === data.child('expiresAt').val()))))",
+        ".validate": "!newData.exists() || newData.hasChildren(['hostName', 'guestName', 'status', 'createdAt', 'expiresAt', 'resetTrigger', 'gameConfig'])",
+        "hostName": {
+          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 20"
+        },
+        "guestName": {
+          ".validate": "newData.isString() && newData.val().length <= 20"
+        },
+        "status": {
+          ".validate": "newData.isString() && (newData.val() === 'waiting' || newData.val() === 'playing')"
+        },
+        "createdAt": {
+          ".validate": "newData.isNumber()"
+        },
+        "expiresAt": {
+          ".validate": "newData.isNumber()"
+        },
+        "resetTrigger": {
+          ".validate": "newData.isNumber() && newData.val() >= 0"
+        },
+        "gameConfig": {
+          ".validate": "newData.hasChildren(['timeControl', 'matchTargetWins'])",
+          "timeControl": {
+            ".validate": "newData.isNumber() && (newData.val() === 0 || newData.val() === 15 || newData.val() === 30 || newData.val() === 60 || newData.val() === 180 || newData.val() === 300)"
+          },
+          "matchTargetWins": {
+            ".validate": "newData.isNumber() && (newData.val() === 0 || newData.val() === 3 || newData.val() === 5)"
+          },
+          "$other": {
+            ".validate": false
+          }
+        },
+        "lastMove": {
+          ".validate": "newData.hasChildren(['player', 'col', 'counter']) && newData.child('player').isNumber() && (newData.child('player').val() === 1 || newData.child('player').val() === 2) && newData.child('col').isNumber() && newData.child('col').val() >= 0 && newData.child('col').val() <= 6 && newData.child('counter').isNumber() && newData.child('counter').val() > 0",
+          "$other": {
+            ".validate": false
+          }
+        },
+        "timerData": {
+          ".validate": "newData.hasChildren(['trigger', 'seconds', 'p1Time', 'p2Time', 'updatedAt']) && newData.child('trigger').isNumber() && newData.child('seconds').isNumber() && newData.child('p1Time').isNumber() && newData.child('p2Time').isNumber() && newData.child('updatedAt').isNumber()",
+          "$other": {
+            ".validate": false
+          }
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    }
+  }
+}

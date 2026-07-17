@@ -1,0 +1,16 @@
+{
+  "name": "Connect Four - Premium Browser Arcade",
+  "short_name": "Connect Four",
+  "description": "Play Connect Four against the computer, locally, or with a friend online.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#03050c",
+  "theme_color": "#08111f",
+  "icons": [
+    {
+      "src": "/red-connect-four-token-256.webp",
+      "sizes": "256x256",
+      "type": "image/webp"
+    }
+  ]
+}

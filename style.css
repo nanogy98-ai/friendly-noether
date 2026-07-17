@@ -38,6 +38,13 @@
   box-sizing: border-box;
 }
 
+button:focus-visible,
+input:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid #8acbff;
+  outline-offset: 3px;
+}
+
 body {
   font-family: var(--font-family);
   background: var(--bg-gradient);
@@ -52,6 +59,22 @@ body {
 
 .hidden {
   display: none !important;
+}
+
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+body.modal-open {
+  overflow: hidden;
 }
 
 /* Master Layout */
@@ -87,7 +110,7 @@ body {
 .logo h1 {
   font-size: 32px;
   font-weight: 300;
-  letter-spacing: 4px;
+  letter-spacing: 0;
   color: #fff;
   text-transform: uppercase;
 }
@@ -167,7 +190,7 @@ body {
   font-weight: 600;
   color: var(--text-secondary);
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 0;
   margin-bottom: 10px;
   display: flex;
   align-items: center;
@@ -324,9 +347,11 @@ body {
 .side-card h2 {
   font-size: 16px;
   font-weight: 300;
-  letter-spacing: 0.5px;
+  letter-spacing: 0;
   color: #fff;
   margin-bottom: 4px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .score-divider {
@@ -355,7 +380,7 @@ body {
 .match-format {
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 1.5px;
+  letter-spacing: 0;
   color: #f39c12;
   margin-top: -10px;
   margin-bottom: 5px;
@@ -375,7 +400,7 @@ body {
 
 .score-label {
   font-size: 12px;
-  letter-spacing: 2px;
+  letter-spacing: 0;
   color: rgba(255, 255, 255, 0.4);
 }
 
@@ -399,7 +424,7 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.5);
   transition: all 0.2s ease;
-  letter-spacing: 2px;
+  letter-spacing: 0;
 }
 
 .player-timer.hidden {
@@ -426,7 +451,7 @@ body {
 
 .connect-label {
   font-size: 10px;
-  letter-spacing: 1.5px;
+  letter-spacing: 0;
   color: rgba(255, 255, 255, 0.3);
 }
 
@@ -670,13 +695,13 @@ body {
 
 .token.player1 {
   background: radial-gradient(circle at 35% 35%, #ff8080 0%, #e60000 40%, #800000 90%, #330000 100%);
-  background-image: url('red-connect-four-token.png');
+  background-image: url('red-connect-four-token-256.webp');
   background-position: center;
   background-size: cover;
 }
 .token.player2 {
   background: radial-gradient(circle at 35% 35%, #ffeb99 0%, #e6b800 40%, #806600 90%, #332900 100%);
-  background-image: url('yellow-connect-four-token.png');
+  background-image: url('yellow-connect-four-token-256.webp');
   background-position: center;
   background-size: cover;
 }
@@ -916,12 +941,36 @@ body {
   gap: 12px;
 }
 
-.setting-item label {
+.setting-label {
   font-size: 13px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0;
   color: var(--text-secondary);
+}
+
+.toggle-row {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.toggle-row input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--accent-color);
+}
+
+.toggle-row:focus-within {
+  border-color: rgba(95, 177, 255, 0.72);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
 }
 
 .mode-selectors, .difficulty-selectors {
@@ -1035,7 +1084,7 @@ body {
 .win-card h2 {
   font-size: 24px;
   font-weight: 700;
-  letter-spacing: 0.5px;
+  letter-spacing: 0;
 }
 
 .win-card p {
@@ -1186,7 +1235,7 @@ body {
   border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.02);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0;
 }
 
 /* Vertical game mode selectors */
@@ -1387,7 +1436,7 @@ body {
   font-size: 11px;
   font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0;
   padding: 3px 10px;
   border-radius: 6px;
   color: #ffffff;
@@ -1463,7 +1512,7 @@ body {
 .logo h1 {
   font-size: 72px;
   font-weight: 300;
-  letter-spacing: 0.25em;
+  letter-spacing: 0;
   line-height: 0.96;
   color: transparent;
   background:
@@ -1573,7 +1622,7 @@ body {
 .connect-label,
 .tracker-header,
 .coach-header {
-  letter-spacing: 0.16em;
+  letter-spacing: 0;
 }
 
 .score-num {
@@ -1740,13 +1789,11 @@ body {
   margin-top: 0;
   padding: 14px 16px;
   text-align: left;
-  border-radius: 14px;
-  background:
-    linear-gradient(160deg, rgba(18, 26, 40, 0.8), rgba(5, 9, 17, 0.86));
-  border-color: rgba(255, 92, 86, 0.2);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 14px 30px rgba(0, 0, 0, 0.24);
+  border: 0;
+  border-top: 1px solid rgba(255, 92, 86, 0.2);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
   overflow-y: auto;
 }
 
@@ -1754,7 +1801,7 @@ body {
   font-size: 12px;
   margin-bottom: 8px;
   padding-bottom: 8px;
-  letter-spacing: 0.2em;
+  letter-spacing: 0;
 }
 
 .red-player-card .coach-icon {
@@ -1818,20 +1865,18 @@ body {
   min-height: 0;
   padding: 14px 16px;
   text-align: left;
-  border-radius: 14px;
-  background:
-    linear-gradient(160deg, rgba(18, 26, 40, 0.8), rgba(5, 9, 17, 0.86));
-  border-color: rgba(255, 198, 82, 0.2);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 14px 30px rgba(0, 0, 0, 0.24);
+  border: 0;
+  border-top: 1px solid rgba(255, 198, 82, 0.2);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .yellow-player-card .tracker-header {
   font-size: 12px;
   margin-bottom: 8px;
   padding-bottom: 8px;
-  letter-spacing: 0.2em;
+  letter-spacing: 0;
 }
 
 .yellow-player-card .tracker-list {
@@ -1871,7 +1916,7 @@ body {
   }
 }
 
-@media (min-width: 701px) and (max-width: 1180px) {
+@media (min-width: 601px) and (max-width: 1180px) {
   :root {
     --cell-size: min(10.5vw, 7.6vh, 78px);
     --token-size: calc(var(--cell-size) * 0.72);
@@ -1885,7 +1930,7 @@ body {
 
   .logo h1 {
     font-size: clamp(44px, 6.2vw, 58px);
-    letter-spacing: 0.22em;
+    letter-spacing: 0;
   }
 
   .turn-pill {
@@ -1989,7 +2034,7 @@ body {
 
   .logo h1 {
     font-size: 31px;
-    letter-spacing: 0.2em;
+    letter-spacing: 0;
   }
 
   .turn-pill {
@@ -2065,9 +2110,8 @@ body {
     margin: 0;
     font-size: 15px;
     text-align: left;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 
   .red-player-card h2,
