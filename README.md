@@ -15,7 +15,7 @@ A responsive browser Connect Four game with pass-and-play, computer opponents, p
 * **Move Coach**: Optional post-move engine feedback for immediate wins, missed blocks, threats, and stronger alternatives.
 * **Move history**: Rebuilds correctly across new games, undo, and restored sessions.
 * **Persistent state**: Session scores, all-time player wins, names, timer, active board, and difficulty are saved in `localStorage`.
-* **Private online rooms**: Share a six-hour Firebase room link or paste its unguessable room code. Rooms are removed when the host disconnects.
+* **Resilient private rooms**: Share a six-hour Firebase room link or paste its unguessable room code. Authenticated room state, scores, clocks, and presence survive refreshes and temporary disconnects.
 * **Accessible controls**: Board columns are keyboard-focusable controls with labels, dialogs trap focus, and move/results are announced through live regions.
 
 ---
@@ -45,7 +45,7 @@ You can also deploy the files to any static host. Pass & Play and computer modes
 3. Host copies the generated invitation link or room code.
 4. Guest opens the invitation link or pastes the room code and connects.
 
-The host controls shared match settings and synchronizes the board and clocks. Online rooms are casual private matches, not authenticated competitive sessions.
+The host controls shared match settings and the authoritative board and clock state. Players receive anonymous Firebase identities, and a temporary disconnect pauses play until both players return. Online rooms are secure casual matches, not server-refereed competitive sessions.
 
 ---
 
@@ -57,4 +57,4 @@ The regression suite uses Node's built-in test runner:
 node --test tests/game-regressions.test.mjs
 ```
 
-The tests cover game rules, engine tactics, state restoration, score rollback, legacy-name migration, timer persistence, and round cancellation.
+The tests cover game rules, engine tactics, state restoration, score rollback, legacy-name migration, timer persistence, round cancellation, authoritative online snapshots, reconnect hydration, and online timeouts.

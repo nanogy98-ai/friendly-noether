@@ -3,7 +3,7 @@
  */
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAFdNRQSA2nPDGgEUnq3KwRZU0j9aK41X8",
+  apiKey: "AIzaSyAFDNRQSA2nPDGgEUnq3KwRZU0j9aK41X8",
   authDomain: "connect4-3877b.firebaseapp.com",
   databaseURL: "https://connect4-3877b-default-rtdb.firebaseio.com",
   projectId: "connect4-3877b",
@@ -14,6 +14,13 @@ const firebaseConfig = {
 
 let db = null;
 let firebaseLoadPromise = null;
+let firebaseUser = null;
+const ONLINE_SESSION_KEY = 'connect4_online_session';
+
+function useFirebaseEmulators() {
+  return ['localhost', '127.0.0.1'].includes(window.location.hostname)
+    && new URLSearchParams(window.location.search).get('emulator') === '1';
+}
 
 function loadScriptOnce(src) {
   const existing = document.querySelector(`script[src="${src}"]`);
@@ -44,9 +51,23 @@ async function ensureFirebase() {
   if (!firebaseLoadPromise) {
     firebaseLoadPromise = (async () => {
       await loadScriptOnce('https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js');
+      await loadScriptOnce('https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js');
       await loadScriptOnce('https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js');
       if (!window.firebase.apps.length) window.firebase.initializeApp(firebaseConfig);
+      const auth = window.firebase.auth();
+      if (useFirebaseEmulators()) auth.useEmulator('http://127.0.0.1:9099', { disableWarnings: true });
+      await auth.setPersistence(window.firebase.auth.Auth.Persistence.LOCAL);
+      const restoredUser = await new Promise((resolve, reject) => {
+        let unsubscribe = () => {};
+        unsubscribe = auth.onAuthStateChanged((user) => {
+          unsubscribe();
+          resolve(user);
+        }, reject);
+      });
+      if (!restoredUser) await auth.signInAnonymously();
+      firebaseUser = auth.currentUser;
       db = window.firebase.database();
+      if (useFirebaseEmulators()) db.useEmulator('127.0.0.1', 9000);
       return db;
     })().catch((error) => {
       firebaseLoadPromise = null;
@@ -54,6 +75,26 @@ async function ensureFirebase() {
     });
   }
   return firebaseLoadPromise;
+}
+
+function readOnlineSession() {
+  try {
+    const session = JSON.parse(localStorage.getItem(ONLINE_SESSION_KEY));
+    if (!session || !isValidRoomId(session.roomId)
+      || !['host', 'guest'].includes(session.role)
+      || Number(session.expiresAt) <= Date.now()) {
+      localStorage.removeItem(ONLINE_SESSION_KEY);
+      return null;
+    }
+    return session;
+  } catch (_) {
+    localStorage.removeItem(ONLINE_SESSION_KEY);
+    return null;
+  }
+}
+
+function saveOnlineSession(session) {
+  localStorage.setItem(ONLINE_SESSION_KEY, JSON.stringify(session));
 }
 
 const LEGACY_COMPUTER_NAME = ['quant', 'um ai'].join('');
@@ -161,7 +202,7 @@ class SoundController {
   playDrop(row) {
     if (!this.enabled) return;
     this.init();
-    
+
     const now = this.ctx.currentTime;
     const dropDuration = 0.12 + (row * 0.06); 
 
@@ -386,9 +427,15 @@ class Game {
     this.roomRef = null;
     this.peerId = null; // acts as roomId
     this.isOnlineHost = false;
-    this.lastMoveCounter = 0;
-    this.localResetTrigger = 0;
-    this.localTimerTrigger = 0;
+    this.onlineReady = false;
+    this.onlineOpponentConnected = false;
+    this.onlineConnectionMessage = 'Connecting...';
+    this.onlineRevision = -1;
+    this.onlineSubmitting = false;
+    this.onlineTimerPending = false;
+    this.onlineShownRounds = new Set();
+    this.disconnectRegistration = null;
+    this.roomValueHandler = null;
     
     // Timer
     this.timerSeconds = 0;
@@ -422,8 +469,20 @@ class Game {
     // Parse a private-room invitation from the URL.
     const urlParams = new URLSearchParams(window.location.search);
     const joinRoomId = urlParams.get('join');
-    
-    if (joinRoomId) {
+    const onlineSession = readOnlineSession();
+    const resumableGuest = joinRoomId && onlineSession?.roomId === joinRoomId && onlineSession.role === 'guest';
+    const resumableHost = !joinRoomId && onlineSession?.role === 'host';
+
+    if (resumableGuest || resumableHost) {
+      const roomId = resumableGuest ? joinRoomId : onlineSession.roomId;
+      const role = resumableGuest ? 'guest' : 'host';
+      if (role === 'host') this.inputP1Name.value = sanitizePlayerName(onlineSession.name, 'Host (Red)');
+      else this.inputP2Name.value = sanitizePlayerName(onlineSession.name, 'Guest (Yellow)');
+      this.loadStats();
+      this.renderScores();
+      this.updateTurnUI();
+      this.scheduleGameTask(() => this.switchMode('online', roomId, { role, resume: true }), 0);
+    } else if (joinRoomId) {
       // Guest arriving via invite link — wipe any saved local game so old tokens don't appear
       localStorage.removeItem('connect4_active_game');
       this.loadStats();
@@ -903,7 +962,10 @@ class Game {
     if (this.gameMode === 'pve' && this.activePlayer === 2) return false;
 
     if (this.gameMode === 'online') {
-      if (!this.roomRef) return false;
+      if (!this.roomRef || !this.onlineReady || this.onlineSubmitting) {
+        if (showAlert && this.onlineConnectionMessage) this.announce(this.onlineConnectionMessage);
+        return false;
+      }
       const myRole = this.isOnlineHost ? 1 : 2;
       if (this.activePlayer !== myRole) {
         if (showAlert) this.announce("It is your opponent's turn.");
@@ -914,15 +976,15 @@ class Game {
     return true;
   }
   
-  switchMode(mode, targetId = null) {
+  switchMode(mode, targetId = null, options = {}) {
     if (this.gameMode === mode && mode !== 'online') return;
     this.sounds.playClick();
     
     // Clean up the previous online room before changing modes.
-    this.destroyFirebase();
+    this.destroyFirebase({ removeRoom: !options.resume, clearSession: !options.resume });
     
     this.gameMode = mode;
-    if (mode === 'online') this.isOnlineHost = !targetId;
+    if (mode === 'online') this.isOnlineHost = (options.role || (targetId ? 'guest' : 'host')) === 'host';
     this.updateHintButtonState();
     
     // Reset UI indicators
@@ -970,12 +1032,17 @@ class Game {
         this.p2NameInputGroup.classList.remove('hidden');
       }
     }
+
+    document.querySelectorAll('.time-btn, .match-btn').forEach((button) => {
+      button.disabled = mode === 'online' && !this.isOnlineHost;
+    });
+    this.newGameBtn.disabled = mode === 'online' && !this.isOnlineHost;
     
     this.updateAllTimeScoreUI();
     this.renderScores();
     // Always clear the board when switching modes
     this.restartGame({ broadcast: false });
-    if (mode === 'online') void this.initFirebase(targetId);
+    if (mode === 'online') void this.initFirebase(targetId, options);
   }
 
   editPlayerNameInline(player) {
@@ -1070,17 +1137,7 @@ class Game {
     }
     
     if (this.gameMode === 'online') {
-      if (this.roomRef) {
-        this.lastMoveCounter = (this.lastMoveCounter || 0) + 1;
-        this.roomRef.update({
-          lastMove: {
-            player: this.isOnlineHost ? 1 : 2,
-            col: col,
-            counter: this.lastMoveCounter
-          }
-        });
-        this.makeMove(row, col, false);
-      }
+      void this.submitOnlineMove(col);
     } else {
       this.makeMove(row, col);
     }
@@ -1318,6 +1375,15 @@ class Game {
   restartGame(options = {}) {
     const shouldBroadcast = options.broadcast !== false;
 
+    if (this.gameMode === 'online' && shouldBroadcast && this.roomRef) {
+      if (!this.isOnlineHost) {
+        this.announce('Only the host can start the next game.');
+        return;
+      }
+      void this.resetOnlineGame();
+      return;
+    }
+
     this.cancelPendingGameTasks();
     this.pauseTimer();
 
@@ -1357,18 +1423,7 @@ class Game {
     this.lastTimerTimestamp = null;
     this.updateTimerDisplay();
 
-    if (this.gameMode === 'online') {
-      if (shouldBroadcast && this.roomRef) {
-        this.localResetTrigger = (this.localResetTrigger || 0) + 1;
-        this.roomRef.update({ 
-          resetTrigger: this.localResetTrigger,
-          gameConfig: {
-            timeControl: this.timeControl,
-            matchTargetWins: this.matchTargetWins
-          }
-        });
-      }
-    } else {
+    if (this.gameMode !== 'online') {
       this.saveActiveGameState();
     }
   }
@@ -1421,13 +1476,27 @@ class Game {
     const p1Name = this.p1NameText.textContent;
     const p2Name = this.p2NameText.textContent;
 
+    if (this.gameMode === 'online' && !this.onlineReady && !this.gameOver) {
+      this.turnText.textContent = this.onlineConnectionMessage;
+      this.turnColorIndicator.className = 'turn-color-indicator';
+      p1Card.classList.remove('active');
+      p2Card.classList.remove('active');
+      this.clearPreviews();
+      this.updateColumnControls();
+      return;
+    }
+
     if (this.gameOver) {
       const winInfo = this.checkWinCondition(this.board);
       if (winInfo) {
         const winnerName = winInfo.player === 1 ? p1Name : p2Name;
         this.turnText.textContent = `${winnerName} Wins!`;
         this.turnColorIndicator.className = `turn-color-indicator ${winInfo.player === 1 ? 'red' : 'yellow'}`;
-      } else if (this.isBoardFull()) {
+      } else if (this.lastResult?.type === 'timeout' && this.lastResult.winner) {
+        const winnerName = this.lastResult.winner === 1 ? p1Name : p2Name;
+        this.turnText.textContent = `${winnerName} Wins!`;
+        this.turnColorIndicator.className = `turn-color-indicator ${this.lastResult.winner === 1 ? 'red' : 'yellow'}`;
+      } else if (this.isBoardFull() || this.lastResult?.type === 'draw') {
         this.turnText.textContent = "It's a Draw!";
         this.turnColorIndicator.className = 'turn-color-indicator';
         p1Card.classList.remove('active');
@@ -1476,7 +1545,7 @@ class Game {
       const col = Number(button.dataset.col);
       const spaces = this.board.reduce((count, row) => count + (row[col] === 0 ? 1 : 0), 0);
       const letter = String.fromCharCode(65 + col);
-      button.disabled = spaces === 0 || this.gameOver;
+      button.disabled = spaces === 0 || this.gameOver || !this.canLocalPlayerAct(false);
       button.setAttribute('aria-disabled', (!this.canLocalPlayerAct(false) || spaces === 0).toString());
       button.setAttribute('aria-label', `Drop token in column ${letter}. ${spaces} ${spaces === 1 ? 'space' : 'spaces'} available.`);
     });
@@ -1545,253 +1614,428 @@ class Game {
   
   // ================= FIREBASE ONLINE MULTIPLAYER SERVICES =================
   
-  async initFirebase(targetId = null) {
-    this.destroyFirebase();
+  async initFirebase(targetId = null, options = {}) {
+    this.destroyFirebase({ removeRoom: false, clearSession: false, markDisconnected: false });
     const generation = this.gameGeneration;
-    this.peerStatus.textContent = "Connecting...";
-    this.peerStatus.className = "status-badge waiting";
+    const role = options.role || (targetId ? 'guest' : 'host');
+    this.isOnlineHost = role === 'host';
+    this.onlineReady = false;
+    this.onlineConnectionMessage = options.resume ? 'Reconnecting...' : 'Connecting...';
+    this.peerStatus.textContent = this.onlineConnectionMessage;
+    this.peerStatus.className = 'status-badge waiting';
+    this.updateTurnUI();
 
     let database;
     try {
       database = await ensureFirebase();
     } catch (error) {
       console.error('Unable to load online play', error);
-      this.peerStatus.textContent = "Online play unavailable";
-      this.peerStatus.className = "status-badge disconnected";
+      this.handleOnlineError('Online play unavailable');
       return;
     }
     if (generation !== this.gameGeneration || this.gameMode !== 'online') return;
 
-    if (targetId) {
-      if (!isValidRoomId(targetId)) {
-        this.peerStatus.textContent = "Invalid room code";
-        this.peerStatus.className = "status-badge disconnected";
-        return;
-      }
-      // Guest joining room
-      this.isOnlineHost = false;
-      this.p1NameText.textContent = 'Host (Red)';
-      this.p2NameText.textContent = sanitizePlayerName(this.inputP2Name.value, 'Guest (Yellow)');
-      
-      this.peerStatus.textContent = "Connecting to Room...";
-      
-      this.peerId = targetId;
-      this.roomRef = database.ref('rooms/' + targetId);
-      try {
-        const snapshot = await this.roomRef.once('value');
-        if (snapshot.exists() && Number(snapshot.val().expiresAt) > Date.now()) {
-          const data = snapshot.val();
-          this.p1NameText.textContent = sanitizePlayerName(data.hostName, 'Host (Red)');
-          
-          await this.roomRef.update({
-            guestName: this.p2NameText.textContent,
-            status: 'playing'
-          });
-          this.setupFirebaseListeners(targetId);
-        } else {
-          this.peerStatus.textContent = "Room not found or expired";
-          this.peerStatus.className = "status-badge disconnected";
-        }
-      } catch (error) {
-        console.error('Unable to join room', error);
-        this.peerStatus.textContent = "Could not join room";
-        this.peerStatus.className = "status-badge disconnected";
-      }
-    } else {
-      // Host creating room
-      this.isOnlineHost = true;
-      this.p1NameText.textContent = sanitizePlayerName(this.inputP1Name.value, 'Host (Red)');
-      this.p2NameText.textContent = 'Waiting...';
-      
-      const roomId = createRoomId();
-      this.peerId = roomId;
-      this.roomRef = database.ref('rooms/' + roomId);
-      const createdAt = Date.now();
-      const expiresAt = createdAt + (6 * 60 * 60 * 1000);
+    const userId = firebaseUser?.uid;
+    if (!userId) {
+      this.handleOnlineError('Could not create a secure player identity');
+      return;
+    }
 
-      try {
+    try {
+      if (role === 'host' && targetId) {
+        if (!isValidRoomId(targetId)) throw new Error('Invalid room code');
+        this.peerId = targetId;
+        this.roomRef = database.ref(`rooms/${targetId}`);
+        const snapshot = await this.roomRef.once('value');
+        const data = snapshot.val();
+        if (!data || data.hostUid !== userId || Number(data.expiresAt) <= Date.now()) {
+          throw new Error('This host session has expired');
+        }
+        this.p1NameText.textContent = sanitizePlayerName(data.hostName, 'Host (Red)');
+        this.p2NameText.textContent = sanitizePlayerName(data.guestName, 'Waiting...');
+        await this.setOnlinePresence('host');
+        this.finishOnlineConnection(targetId, 'host', data.expiresAt);
+      } else if (role === 'guest') {
+        if (!isValidRoomId(targetId)) throw new Error('Invalid room code');
+        this.peerId = targetId;
+        this.roomRef = database.ref(`rooms/${targetId}`);
+        const guestName = sanitizePlayerName(this.inputP2Name.value, 'Guest (Yellow)');
+        const claim = await this.roomRef.child('guestUid').transaction((currentGuest) => {
+          if (!currentGuest || currentGuest === userId) return userId;
+          return undefined;
+        });
+        if (!claim.committed) throw new Error('Room is full, missing, or expired');
+        await this.roomRef.update({
+          guestName,
+          status: 'playing',
+          'presence/guest': { connected: true, lastSeen: Date.now() }
+        });
+        const roomSnapshot = await this.roomRef.once('value');
+        const data = roomSnapshot.val();
+        if (!data || Number(data.expiresAt) <= Date.now()) throw new Error('Room is missing or expired');
+        this.p1NameText.textContent = sanitizePlayerName(data.hostName, 'Host (Red)');
+        this.p2NameText.textContent = guestName;
+        await this.setOnlinePresence('guest');
+        this.finishOnlineConnection(targetId, 'guest', data.expiresAt);
+      } else {
+        const roomId = createRoomId();
+        const createdAt = Date.now();
+        const expiresAt = createdAt + (6 * 60 * 60 * 1000);
+        this.peerId = roomId;
+        this.roomRef = database.ref(`rooms/${roomId}`);
+        this.p1NameText.textContent = sanitizePlayerName(this.inputP1Name.value, 'Host (Red)');
+        this.p2NameText.textContent = 'Waiting...';
         await this.roomRef.set({
+          hostUid: userId,
+          guestUid: '',
           hostName: this.p1NameText.textContent,
           guestName: '',
           status: 'waiting',
           createdAt,
           expiresAt,
-          resetTrigger: 0,
           gameConfig: {
             timeControl: this.timeControl,
             matchTargetWins: this.matchTargetWins
-          }
+          },
+          presence: {
+            host: { connected: true, lastSeen: createdAt }
+          },
+          gameState: ConnectFourOnlineState.createInitialState({
+            timeControl: this.timeControl,
+            roundId: createRoomId(),
+            now: createdAt
+          })
         });
-        this.disconnectRegistration = this.roomRef.onDisconnect();
-        this.disconnectRegistration.remove();
-        this.setupFirebaseListeners(roomId);
-
-        this.peerStatus.textContent = "Waiting for Friend...";
-        this.peerStatus.className = "status-badge waiting";
-        const shareLink = `${window.location.origin}${window.location.pathname}?join=${roomId}`;
-        this.onlineShareUrl.value = shareLink;
-      } catch (error) {
-        console.error('Unable to create room', error);
-        this.peerStatus.textContent = "Could not create room";
-        this.peerStatus.className = "status-badge disconnected";
+        await this.setOnlinePresence('host');
+        this.finishOnlineConnection(roomId, 'host', expiresAt);
       }
+    } catch (error) {
+      console.error('Unable to establish online room', error);
+      localStorage.removeItem(ONLINE_SESSION_KEY);
+      this.handleOnlineError(error.message || 'Could not connect to room');
     }
     this.updateAllTimeScoreUI();
   }
-  
-  connectToPeer(targetId) {
-    if (!isValidRoomId(targetId)) {
-      this.peerStatus.textContent = "Enter a valid room code";
-      this.peerStatus.className = "status-badge disconnected";
-      return;
-    }
-    void this.initFirebase(targetId);
-  }
-  
-  setupFirebaseListeners(roomId) {
-    const onConnectionReady = () => {
-      this.peerStatus.textContent = "Connected";
-      this.peerStatus.className = "status-badge connected";
-      this.sounds.playClick();
-      
-      this.closeSettings();
-      
-      this.updateAllTimeScoreUI();
-      if (this.isOnlineHost) {
-        // Host starts a fresh game and broadcasts the reset
-        this.restartGame({ broadcast: true });
-      } else {
-        // Guest clears the board locally — Host controls state
-        this.restartGame({ broadcast: false });
-      }
-    };
 
-    let hasConnected = false;
-
-    this.roomRef.on('value', (snapshot) => {
-      if (!snapshot.exists()) return;
-      const data = snapshot.val();
-
-      // --- Guest: Sync config from DB on very first snapshot ---
-      if (!this.isOnlineHost && data.gameConfig && !hasConnected) {
-        this.timeControl = data.gameConfig.timeControl ?? this.timeControl;
-        this.matchTargetWins = data.gameConfig.matchTargetWins ?? this.matchTargetWins;
-        this.p1TimeRemaining = this.timeControl;
-        this.p2TimeRemaining = this.timeControl;
-        this.updateMatchFormatUI();
-        this.updatePlayerTimersUI();
-        document.querySelectorAll('.time-btn').forEach(b => {
-          const selected = parseInt(b.dataset.time, 10) === this.timeControl;
-          b.classList.toggle('active', selected);
-          b.setAttribute('aria-pressed', selected ? 'true' : 'false');
-        });
-        document.querySelectorAll('.match-btn').forEach(b => {
-          const selected = parseInt(b.dataset.wins, 10) === this.matchTargetWins;
-          b.classList.toggle('active', selected);
-          b.setAttribute('aria-pressed', selected ? 'true' : 'false');
-        });
-      }
-
-      // --- Connection handshake ---
-      if (data.status === 'playing' && !hasConnected) {
-        hasConnected = true;
-        // Pre-seed the move counter so we don't replay old moves
-        this.lastMoveCounter = data.lastMove ? (data.lastMove.counter || 0) : 0;
-        onConnectionReady();
-      }
-
-      // --- Name sync ---
-      if (this.isOnlineHost && data.guestName && data.guestName !== this.p2NameText.textContent) {
-        this.p2NameText.textContent = data.guestName;
-        this.updateAllTimeScoreUI();
-      } else if (!this.isOnlineHost && data.hostName && data.hostName !== this.p1NameText.textContent) {
-        this.p1NameText.textContent = data.hostName;
-        this.updateAllTimeScoreUI();
-      }
-
-      // --- Config sync (mid-game host change) ---
-      if (!this.isOnlineHost && hasConnected && data.gameConfig) {
-        if (this.timeControl !== data.gameConfig.timeControl || this.matchTargetWins !== data.gameConfig.matchTargetWins) {
-          this.timeControl = data.gameConfig.timeControl;
-          this.matchTargetWins = data.gameConfig.matchTargetWins;
-          if (this.moveHistory.length === 0) {
-            this.p1TimeRemaining = this.timeControl;
-            this.p2TimeRemaining = this.timeControl;
-          }
-          this.updateMatchFormatUI();
-          this.updatePlayerTimersUI();
-          document.querySelectorAll('.time-btn').forEach(b => {
-            const selected = parseInt(b.dataset.time, 10) === this.timeControl;
-            b.classList.toggle('active', selected);
-            b.setAttribute('aria-pressed', selected ? 'true' : 'false');
-          });
-          document.querySelectorAll('.match-btn').forEach(b => {
-            const selected = parseInt(b.dataset.wins, 10) === this.matchTargetWins;
-            b.classList.toggle('active', selected);
-            b.setAttribute('aria-pressed', selected ? 'true' : 'false');
-          });
-        }
-      }
-
-      // --- Opponent move ---
-      if (hasConnected && data.lastMove && data.lastMove.counter > (this.lastMoveCounter || 0)) {
-        this.lastMoveCounter = data.lastMove.counter;
-        if (data.lastMove.player !== (this.isOnlineHost ? 1 : 2)) {
-          const row = this.getNextOpenRow(this.board, data.lastMove.col);
-          if (row !== -1) {
-            this.makeMove(row, data.lastMove.col, false);
-          }
-        }
-      }
-
-      // --- Reset trigger ---
-      if (hasConnected && data.resetTrigger && data.resetTrigger > (this.localResetTrigger || 0)) {
-        this.localResetTrigger = data.resetTrigger;
-        // Sync config on reset too
-        if (data.gameConfig) {
-          this.timeControl = data.gameConfig.timeControl ?? this.timeControl;
-          this.matchTargetWins = data.gameConfig.matchTargetWins ?? this.matchTargetWins;
-        }
-        this.restartGame({ broadcast: false });
-      }
-
-      // --- Timer sync (Guest side only, driven by Host) ---
-      if (!this.isOnlineHost && data.timerData && data.timerData.trigger > (this.localTimerTrigger || 0)) {
-        this.localTimerTrigger = data.timerData.trigger;
-        this.timerSeconds = data.timerData.seconds;
-        // Start Guest's display timer if not already running
-        if (!this.timerInterval && !this.gameOver && this.moveHistory.length > 0) {
-          this.resumeTimer();
-        }
-        if (data.timerData.p1Time !== undefined) {
-          this.p1TimeRemaining = data.timerData.p1Time;
-          this.p2TimeRemaining = data.timerData.p2Time;
-          this.updatePlayerTimersUI();
-          if (this.p1TimeRemaining <= 0 && this.timeControl > 0) this.handleTimeout(1);
-          if (this.p2TimeRemaining <= 0 && this.timeControl > 0) this.handleTimeout(2);
-        }
-        this.updateTimerDisplay();
-      }
+  async setOnlinePresence(role) {
+    const presenceRef = this.roomRef.child(`presence/${role}`);
+    await presenceRef.set({
+      connected: true,
+      lastSeen: window.firebase.database.ServerValue.TIMESTAMP
+    });
+    this.disconnectRegistration = presenceRef.onDisconnect();
+    await this.disconnectRegistration.update({
+      connected: false,
+      lastSeen: window.firebase.database.ServerValue.TIMESTAMP
     });
   }
-  
-  destroyFirebase() {
-    if (this.roomRef) {
-      const oldRoom = this.roomRef;
-      const shouldRemoveRoom = this.isOnlineHost;
-      this.roomRef.off();
+
+  finishOnlineConnection(roomId, role, expiresAt) {
+    const name = role === 'host' ? this.p1NameText.textContent : this.p2NameText.textContent;
+    saveOnlineSession({ roomId, role, name, expiresAt });
+    this.setupFirebaseListeners();
+    if (role === 'host') {
+      const inviteParams = new URLSearchParams({ join: roomId });
+      if (useFirebaseEmulators()) inviteParams.set('emulator', '1');
+      this.onlineShareUrl.value = `${window.location.origin}${window.location.pathname}?${inviteParams}`;
+    }
+  }
+
+  connectToPeer(targetId) {
+    if (!isValidRoomId(targetId)) {
+      this.handleOnlineError('Enter a valid room code');
+      return;
+    }
+    this.destroyFirebase({ removeRoom: true, clearSession: true });
+    this.isOnlineHost = false;
+    void this.initFirebase(targetId, { role: 'guest' });
+  }
+
+  setupFirebaseListeners() {
+    this.roomValueHandler = (snapshot) => {
+      if (!snapshot.exists()) {
+        localStorage.removeItem(ONLINE_SESSION_KEY);
+        this.handleOnlineError('Match ended');
+        this.gameOver = true;
+        this.updateTurnUI();
+        return;
+      }
+
+      const data = snapshot.val();
+      if (Number(data.expiresAt) <= Date.now()) {
+        this.handleOnlineError('Room expired');
+        return;
+      }
+
+      this.p1NameText.textContent = sanitizePlayerName(data.hostName, 'Host (Red)');
+      this.p2NameText.textContent = sanitizePlayerName(data.guestName, 'Waiting...');
+      this.syncOnlineConfig(data.gameConfig);
+      this.syncOnlineState(data.gameState);
+
+      const ownRole = this.isOnlineHost ? 'host' : 'guest';
+      const opponentRole = this.isOnlineHost ? 'guest' : 'host';
+      const ownConnected = data.presence?.[ownRole]?.connected === true;
+      const opponentConnected = data.presence?.[opponentRole]?.connected === true;
+      const hasOpponent = Boolean(data.guestUid);
+      const wasReady = this.onlineReady;
+      this.onlineOpponentConnected = hasOpponent && opponentConnected;
+      this.onlineReady = data.status === 'playing' && ownConnected && opponentConnected;
+
+      if (!hasOpponent) {
+        this.onlineConnectionMessage = 'Waiting for friend...';
+        this.peerStatus.textContent = 'Waiting for Friend...';
+        this.peerStatus.className = 'status-badge waiting';
+      } else if (!opponentConnected) {
+        this.onlineConnectionMessage = 'Friend disconnected - waiting to reconnect...';
+        this.peerStatus.textContent = 'Friend reconnecting...';
+        this.peerStatus.className = 'status-badge waiting';
+      } else if (!ownConnected) {
+        this.onlineConnectionMessage = 'Reconnecting...';
+        this.peerStatus.textContent = 'Reconnecting...';
+        this.peerStatus.className = 'status-badge waiting';
+      } else {
+        this.onlineConnectionMessage = '';
+        this.peerStatus.textContent = 'Connected';
+        this.peerStatus.className = 'status-badge connected';
+        if (!wasReady) {
+          this.sounds.playClick();
+          this.closeSettings();
+        }
+      }
+
+      if (!this.onlineReady) this.pauseTimer();
+      else if (this.isOnlineHost && this.moveHistory.length > 0 && !this.gameOver) this.resumeTimer();
+      this.updateAllTimeScoreUI();
+      this.updateTurnUI();
+    };
+
+    this.roomRef.on('value', this.roomValueHandler, (error) => {
+      console.error('Online room listener failed', error);
+      this.handleOnlineError('Connection lost - retrying...');
+    });
+  }
+
+  syncOnlineConfig(config) {
+    if (!config) return;
+    const timeControl = [0, 15, 30, 60, 180, 300].includes(config.timeControl) ? config.timeControl : 0;
+    const matchTargetWins = [0, 3, 5].includes(config.matchTargetWins) ? config.matchTargetWins : 0;
+    this.timeControl = timeControl;
+    this.matchTargetWins = matchTargetWins;
+    this.updateMatchFormatUI();
+    document.querySelectorAll('.time-btn').forEach((button) => {
+      const selected = parseInt(button.dataset.time, 10) === timeControl;
+      button.classList.toggle('active', selected);
+      button.setAttribute('aria-pressed', selected ? 'true' : 'false');
+    });
+    document.querySelectorAll('.match-btn').forEach((button) => {
+      const selected = parseInt(button.dataset.wins, 10) === matchTargetWins;
+      button.classList.toggle('active', selected);
+      button.setAttribute('aria-pressed', selected ? 'true' : 'false');
+    });
+  }
+
+  syncOnlineState(rawState) {
+    const state = ConnectFourOnlineState.normalizeState(rawState);
+    if (!state || state.revision < this.onlineRevision) return;
+
+    const previousMoveCount = this.moveHistory.length;
+    const previousRoundId = this.onlineRoundId;
+    const boardChanged = previousRoundId !== state.roundId
+      || JSON.stringify(this.board) !== JSON.stringify(state.board);
+    const scoresChanged = JSON.stringify(this.scores.online) !== JSON.stringify(state.scores);
+
+    this.onlineRevision = state.revision;
+    this.onlineRoundId = state.roundId;
+    this.board = state.board;
+    this.moveHistory = state.moveHistory;
+    this.activePlayer = state.activePlayer;
+    this.gameOver = state.gameOver;
+    this.animating = false;
+    this.timerSeconds = state.timerSeconds;
+    this.p1TimeRemaining = state.p1Time;
+    this.p2TimeRemaining = state.p2Time;
+    this.scores.online = state.scores;
+    this.lastResult = state.gameOver
+      ? { type: state.resultType, winner: state.winner || null, winnerName: null, mode: 'online' }
+      : null;
+
+    if (boardChanged) {
+      this.tokensContainer.innerHTML = '';
+      this.moveHistory.forEach((move) => {
+        const token = document.createElement('div');
+        token.className = `token player${move.player}`;
+        token.dataset.row = move.row;
+        token.dataset.col = move.col;
+        token.style.left = `calc(${move.col} * (100% / var(--board-cols)) + (100% / var(--board-cols) - var(--token-size)) / 2)`;
+        token.style.transform = `translateY(calc(${move.row} * var(--cell-size) + (var(--cell-size) - var(--token-size)) / 2))`;
+        this.tokensContainer.appendChild(token);
+      });
+      this.rebuildMoveTracker();
+      if (previousRoundId === state.roundId && state.moveHistory.length === previousMoveCount + 1 && state.lastMove) {
+        this.sounds.playDrop(state.lastMove.row);
+      }
+    }
+
+    this.updateTimerDisplay();
+    this.updatePlayerTimersUI();
+    this.renderScores();
+    if (scoresChanged) this.saveStats();
+    if (state.resultType === 'win') {
+      const win = ConnectFourOnlineState.findWin(state.board);
+      if (win) this.highlightWinningTokens(win.cells);
+    }
+    if (state.gameOver) this.presentOnlineResult(state);
+    else this.winOverlay.classList.add('hidden');
+  }
+
+  presentOnlineResult(state) {
+    if (this.onlineShownRounds.has(state.roundId)) return;
+    this.onlineShownRounds.add(state.roundId);
+    this.pauseTimer();
+
+    const p1Name = this.p1NameText.textContent;
+    const p2Name = this.p2NameText.textContent;
+    const winnerName = state.winner === 1 ? p1Name : p2Name;
+    const isDraw = state.resultType === 'draw';
+    if (isDraw) this.sounds.playClick();
+    else {
+      this.sounds.playWin();
+      this.confetti.start();
+    }
+
+    if (!isDraw) this.awardOnlineAllTimeOnce(state.roundId, winnerName);
+    const isMatchWin = this.matchTargetWins > 0
+      && (state.scores.p1 >= this.matchTargetWins || state.scores.p2 >= this.matchTargetWins);
+    this.winTitle.textContent = isDraw ? 'Match Draw!' : (isMatchWin ? 'SERIES VICTORY!' : `${winnerName} Wins!`);
+    this.winSubtitle.textContent = isDraw
+      ? 'A perfect defensive grid from both sides.'
+      : state.resultType === 'timeout'
+        ? `${winnerName} wins on time!`
+        : `${winnerName} connected four in ${state.moveHistory.length} moves.`;
+    this.winEmoji.textContent = isDraw ? '=' : (isMatchWin ? '1' : (state.winner === 1 ? 'R' : 'Y'));
+    this.scheduleGameTask(() => {
+      this.winOverlay.classList.remove('hidden');
+      this.scheduleGameTask(() => {
+        this.winOverlay.classList.add('hidden');
+        this.confetti.stop();
+      }, 3500);
+    }, 500);
+  }
+
+  awardOnlineAllTimeOnce(roundId, winnerName) {
+    let awarded = [];
+    try {
+      awarded = JSON.parse(localStorage.getItem('connect4_online_awards')) || [];
+    } catch (_) {}
+    if (awarded.includes(roundId)) return;
+    awarded.push(roundId);
+    localStorage.setItem('connect4_online_awards', JSON.stringify(awarded.slice(-50)));
+    this.allTimeScores[winnerName] = (this.allTimeScores[winnerName] || 0) + 1;
+    this.saveAllTimeScores();
+    this.updateAllTimeScoreUI();
+  }
+
+  async submitOnlineMove(col) {
+    if (!this.canLocalPlayerAct(true) || !this.roomRef) return;
+    this.onlineSubmitting = true;
+    this.updateColumnControls();
+    const player = this.isOnlineHost ? 1 : 2;
+    try {
+      const result = await this.roomRef.child('gameState').transaction((state) => (
+        ConnectFourOnlineState.applyMove(state, col, player, Date.now()) || undefined
+      ));
+      if (!result.committed) this.announce('That move was not accepted. The board has been refreshed.');
+    } catch (error) {
+      console.error('Online move failed', error);
+      this.announce('Move failed. Check your connection and try again.');
+    } finally {
+      this.onlineSubmitting = false;
+      this.updateColumnControls();
+    }
+  }
+
+  async resetOnlineGame() {
+    if (!this.roomRef || !this.isOnlineHost) return;
+    try {
+      const timeControl = this.timeControl;
+      const matchTargetWins = this.matchTargetWins;
+      const roundId = createRoomId();
+      const result = await this.roomRef.transaction((room) => {
+        if (!room || room.hostUid !== firebaseUser?.uid) return;
+        const nextState = ConnectFourOnlineState.resetState(room.gameState, {
+          timeControl,
+          matchTargetWins,
+          roundId,
+          now: Date.now()
+        });
+        if (!nextState) return;
+        room.gameConfig = { timeControl, matchTargetWins };
+        room.gameState = nextState;
+        return room;
+      });
+      if (!result.committed) this.announce('Could not start a new game.');
+    } catch (error) {
+      console.error('Online reset failed', error);
+      this.announce('Could not start a new game.');
+    }
+  }
+
+  async advanceOnlineTimer(elapsed) {
+    if (this.onlineTimerPending || !this.roomRef || !this.isOnlineHost || !this.onlineReady) return;
+    this.onlineTimerPending = true;
+    try {
+      await this.roomRef.child('gameState').transaction((state) => (
+        ConnectFourOnlineState.advanceClock(state, elapsed, this.timeControl, Date.now()) || undefined
+      ));
+    } catch (error) {
+      console.error('Online timer update failed', error);
+    } finally {
+      this.onlineTimerPending = false;
+    }
+  }
+
+  handleOnlineError(message) {
+    this.onlineReady = false;
+    this.onlineConnectionMessage = message;
+    this.pauseTimer();
+    if (this.peerStatus) {
+      this.peerStatus.textContent = message;
+      this.peerStatus.className = 'status-badge disconnected';
+    }
+    this.updateTurnUI();
+  }
+
+  destroyFirebase(options = {}) {
+    const { removeRoom = true, clearSession = true, markDisconnected = true } = options;
+    const oldRoom = this.roomRef;
+    const oldRole = this.isOnlineHost ? 'host' : 'guest';
+    if (oldRoom) {
+      if (this.roomValueHandler) oldRoom.off('value', this.roomValueHandler);
+      else oldRoom.off();
       this.roomRef = null;
-      if (shouldRemoveRoom) oldRoom.remove().catch(() => {});
+      if (removeRoom && this.isOnlineHost) {
+        oldRoom.remove().catch(() => {});
+      } else if (markDisconnected) {
+        oldRoom.child(`presence/${oldRole}`).update({
+          connected: false,
+          lastSeen: window.firebase?.database?.ServerValue?.TIMESTAMP || Date.now()
+        }).catch(() => {});
+      }
     }
     this.disconnectRegistration?.cancel?.();
     this.disconnectRegistration = null;
+    this.roomValueHandler = null;
     this.peerId = null;
-    this.lastMoveCounter = 0;
-    this.localResetTrigger = 0;
-    this.localTimerTrigger = 0;
+    this.onlineReady = false;
+    this.onlineOpponentConnected = false;
+    this.onlineRevision = -1;
+    this.onlineRoundId = null;
+    this.onlineSubmitting = false;
+    this.onlineTimerPending = false;
+    if (clearSession) localStorage.removeItem(ONLINE_SESSION_KEY);
     if (this.peerStatus) {
-      this.peerStatus.textContent = "Idle";
-      this.peerStatus.className = "status-badge disconnected";
+      this.peerStatus.textContent = 'Idle';
+      this.peerStatus.className = 'status-badge disconnected';
     }
   }
   
@@ -1826,23 +2070,16 @@ class Game {
     const elapsed = Math.floor((now - this.lastTimerTimestamp) / 1000);
     if (elapsed < 1) return;
     this.lastTimerTimestamp += elapsed * 1000;
+
+    if (this.gameMode === 'online') {
+      if (this.isOnlineHost) void this.advanceOnlineTimer(elapsed);
+      return;
+    }
+
     this.timerSeconds += elapsed;
     this.tickPlayerClocks(elapsed);
     this.updateTimerDisplay();
     this.saveActiveGameState();
-
-    if (this.gameMode === 'online' && this.isOnlineHost && this.roomRef && !this.gameOver) {
-      this.localTimerTrigger = (this.localTimerTrigger || 0) + 1;
-      this.roomRef.update({
-        timerData: {
-          trigger: this.localTimerTrigger,
-          seconds: this.timerSeconds,
-          p1Time: this.p1TimeRemaining,
-          p2Time: this.p2TimeRemaining,
-          updatedAt: Date.now()
-        }
-      }).catch(() => {});
-    }
   }
   
   tickPlayerClocks(elapsed = 1) {

@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import vm from 'node:vm';
 
 const APP_SOURCE = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
+const ONLINE_SOURCE = readFileSync(new URL('../online-state.js', import.meta.url), 'utf8');
 const ENGINE_SOURCE = readFileSync(new URL('../connect-four-engine.js', import.meta.url), 'utf8');
 const CSS_SOURCE = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 const HTML_SOURCE = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
@@ -294,7 +295,7 @@ function loadGame(storageSeed = {}, options = {}) {
     Peer: class {}
   };
   context.globalThis = context;
-  vm.runInNewContext(`${APP_SOURCE}\nglobalThis.__exports = { Game };`, context);
+  vm.runInNewContext(`${ONLINE_SOURCE}\n${APP_SOURCE}\nglobalThis.__exports = { Game, ConnectFourOnlineState };`, context);
   const game = new context.__exports.Game();
   game.sounds.enabled = false;
   const flushTimers = () => {
@@ -312,6 +313,13 @@ function loadEngine() {
   context.globalThis = context;
   vm.runInNewContext(ENGINE_SOURCE, context);
   return context.ConnectFourEngine;
+}
+
+function loadOnlineState() {
+  const context = { console, Date };
+  context.globalThis = context;
+  vm.runInNewContext(ONLINE_SOURCE, context);
+  return context.ConnectFourOnlineState;
 }
 
 test('CSS defines a reusable hidden utility for initially hidden settings groups', () => {
@@ -601,11 +609,78 @@ test('engine detects horizontal, vertical, and both diagonal wins', () => {
   });
 });
 
+test('authoritative online state rejects stale turns and full columns', () => {
+  const online = loadOnlineState();
+  let state = online.createInitialState({ roundId: 'A'.repeat(22), now: 1 });
+
+  assert.equal(online.applyMove(state, 3, 2, 2), null);
+  for (let index = 0; index < 6; index++) {
+    state = online.applyMove(state, 3, state.activePlayer, index + 2);
+  }
+
+  assert.equal(online.applyMove(state, 3, state.activePlayer, 10), null);
+  assert.equal(state.moveHistory.length, 6);
+});
+
+test('authoritative snapshots fully hydrate reconnecting players', () => {
+  const online = loadOnlineState();
+  let hostState = online.createInitialState({ roundId: 'B'.repeat(22), now: 1 });
+  [3, 2, 3, 4, 2].forEach((col) => {
+    hostState = online.applyMove(hostState, col, hostState.activePlayer, hostState.revision + 2);
+  });
+
+  const guestState = online.normalizeState(JSON.parse(JSON.stringify(hostState)));
+
+  assert.deepEqual(JSON.parse(JSON.stringify(guestState.board)), JSON.parse(JSON.stringify(hostState.board)));
+  assert.deepEqual(JSON.parse(JSON.stringify(guestState.moveHistory)), JSON.parse(JSON.stringify(hostState.moveHistory)));
+  assert.equal(guestState.revision, 5);
+  assert.equal(guestState.activePlayer, 2);
+});
+
+test('online wins and resets update scores exactly once', () => {
+  const online = loadOnlineState();
+  let state = online.createInitialState({ roundId: 'C'.repeat(22), now: 1 });
+  [0, 1, 0, 1, 0, 1, 0].forEach((col) => {
+    state = online.applyMove(state, col, state.activePlayer, state.revision + 2);
+  });
+
+  assert.equal(state.gameOver, true);
+  assert.equal(state.winner, 1);
+  assert.equal(state.scores.p1, 1);
+  assert.equal(online.applyMove(state, 2, 2, 20), null);
+
+  const reset = online.resetState(state, {
+    timeControl: 30,
+    matchTargetWins: 3,
+    roundId: 'D'.repeat(22),
+    now: 21
+  });
+  assert.equal(reset.scores.p1, 1);
+  assert.equal(reset.moveHistory.length, 0);
+  assert.equal(reset.p1Time, 30);
+  assert.equal(reset.revision, state.revision + 1);
+});
+
+test('host clock transactions produce one authoritative timeout result', () => {
+  const online = loadOnlineState();
+  let state = online.createInitialState({ timeControl: 15, roundId: 'E'.repeat(22), now: 1 });
+  state = online.applyMove(state, 3, 1, 2);
+  state = online.advanceClock(state, 15, 15, 17);
+
+  assert.equal(state.gameOver, true);
+  assert.equal(state.resultType, 'timeout');
+  assert.equal(state.winner, 1);
+  assert.equal(state.scores.p1, 1);
+  assert.equal(online.advanceClock(state, 1, 15, 18), null);
+});
+
 test('online database rules deny root reads and require unguessable room ids', () => {
   assert.equal(RULES.rules['.read'], false);
   assert.equal(RULES.rules['.write'], false);
   assert.match(RULES.rules.rooms.$roomId['.read'], /\{22\}/);
   assert.match(RULES.rules.rooms.$roomId['.read'], /expiresAt/);
+  assert.match(RULES.rules.rooms.$roomId['.read'], /auth != null/);
+  assert.match(RULES.rules.rooms.$roomId['.write'], /hostUid/);
 });
 
 test('Firebase is removed from the critical render path', () => {
